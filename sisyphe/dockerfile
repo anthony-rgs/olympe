@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+# Install needed system packages:
+# - cron: to schedule and run periodic jobs
+# - curl, procps: handy utilities (health checks, process info)
+# - docker.io: to allow running `docker` commands inside the container (docker-in-docker style)
+RUN apt-get update && apt-get install -y cron curl procps docker.io && rm -rf /var/lib/apt/lists/*
+
+# Install a system-wide crontab file (in /etc/cron.d) and load it
+COPY crontab.txt /etc/cron.d/trigger-heracles
+RUN chmod 0644 /etc/cron.d/trigger-heracles && crontab /etc/cron.d/trigger-heracles
+
+# Copy the entrypoint script and make it executable
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# On container start, run the entrypoint
+ENTRYPOINT ["bash", "/entrypoint.sh"]
