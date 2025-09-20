@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  artemis: # -> Scaper
+    build: ./artemis
+    container_name: olympe-artemis
+    volumes:
+      - artemis-code:/code-artemis # to access the cloned Artemis code and its requirements.txt
+      - ./artemis/collections:/app/collections # to write/read JSON locally
+
+  athena: # -> Postgres DB
+    image: postgres:16-alpine
+    container_name: olympe-athena
+    env_file: .env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./athena/pgdata:/var/lib/postgresql/data
+      - ./athena/initdb:/docker-entrypoint-initdb.d # auto schema on first start
+    ports:
+      - "5432:5432" # to connect locally without docker exec
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  owl: # -> ingest into DB
+    build: ./owl
+    container_name: olympe-owl
+    depends_on:
+      athena:
+        condition: service_healthy # waits for Postgres to be ready
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      TRACKS_PATH: /data/collections/billion-club/tracks
+      ARTISTS_PATH: /data/collections/billion-club/artists
+      TZ: Europe/Paris
+    volumes:
+      - ./artemis/collections:/data/collections:ro # read-only: JSON produced by artemis
+    restart: unless-stopped
+
+  heracles: # -> scripts manager
+    build: ./heracles
+    container_name: olympe-heracles
+    depends_on:
+      - artemis # needs Artemis code/outputs
+      - owl # ensures Owl is started before doing `docker exec`
+    volumes:
+      - artemis-code:/code-artemis
+      - ./artemis/collections:/app/collections
+      - /var/run/docker.sock:/var/run/docker.sock # required to run `docker exec` into owl
+      - ${HOME}/.docker/run/docker.sock:/var/run/docker.sock # <-- macOS fix
+    restart: unless-stopped
+
+  hermes: # -> API
+    build: ./hermes
+    container_name: olympe-hermes
+    depends_on:
+      athena:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      TRACKS_PATH: /data/collections/billion-club/tracks
+      ARTISTS_PATH: /data/collections/billion-club/artists
+    ports:
+      - "8000:8000" # Swagger: http://localhost:8000/docs
+    restart: unless-stopped
+
+  sisyphe:
+    build: ./sisyphe
+    container_name: olympe-sisyphe
+    depends_on:
+      - heracles
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # allows sisyphe to run docker exec
+
+volumes:
+  artemis-code:
