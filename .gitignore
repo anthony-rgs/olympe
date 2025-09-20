@@ -1,0 +1,4 @@
+.env
+
+/artemis/collections
+/athena/pgdata
