@@ -1,0 +1,5 @@
+# Serve HTTPS for the API domain and proxy to the FastAPI service in Docker
+api.spotify-billions.club {
+  encode zstd gzip             # Enable compression
+  reverse_proxy hermes:8000    # Forward to the 'hermes' container's port 8000
+}

@@ -1,6 +1,16 @@
 version: "3.8"
 
 services:
+  caddy: # -> Reverse proxy with automatic HTTPS
+    image: caddy:2
+    container_name: reverse-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
+
   artemis: # -> Scaper
     build: ./artemis
     container_name: olympe-artemis
@@ -13,14 +23,14 @@ services:
     container_name: olympe-athena
     env_file: .env
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./athena/pgdata:/var/lib/postgresql/data
       - ./athena/initdb:/docker-entrypoint-initdb.d # auto schema on first start
-    ports:
-      - "5432:5432" # to connect locally without docker exec
+    # ports:
+    #   - "5432:5432" # to connect locally without docker exec // only local
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -68,8 +78,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       TRACKS_PATH: /data/collections/billion-club/tracks
       ARTISTS_PATH: /data/collections/billion-club/artists
-    ports:
-      - "8000:8000" # Swagger: http://localhost:8000/docs
+    # ports:
+    #   - "8000:8000" # Swagger: http://localhost:8000/docs // only for local
     restart: unless-stopped
 
   sisyphe:
@@ -82,3 +92,5 @@ services:
 
 volumes:
   artemis-code:
+  caddy_data:
+  caddy_config:
