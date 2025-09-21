@@ -19,7 +19,7 @@ def list_titles():
         titles.updated_at,
         COALESCE(
           json_agg(
-            json_build_object('artist_id', artists.id, 'artist_name', artists.artist_name)
+            json_build_object('id', artists.id, 'artist_name', artists.artist_name)
           ) FILTER (WHERE artists.id IS NOT NULL),
           '[]'
         ) AS artists
