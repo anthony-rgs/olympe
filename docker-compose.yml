@@ -63,7 +63,7 @@ services:
       - artemis-code:/code-artemis
       - ./artemis/collections:/app/collections
       - /var/run/docker.sock:/var/run/docker.sock # required to run `docker exec` into owl
-      - ${HOME}/.docker/run/docker.sock:/var/run/docker.sock # <-- macOS fix
+      # - ${HOME}/.docker/run/docker.sock:/var/run/docker.sock # <-- macOS fix -> remove pour linux
     restart: unless-stopped
 
   hermes: # -> API
