@@ -109,7 +109,7 @@ docker compose exec owl bash -lc 'python -u /app/ingest.py'
 **Trigger via Heracles**
 
 ```bash
-docker compose exec heracles bash -lc './run.sh'   # example entrypoint
+docker compose exec heracles python3 /app/run_billion_club.py
 ```
 
 **Inspect Sisyphe cron**
