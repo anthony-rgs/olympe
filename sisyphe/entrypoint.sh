@@ -5,6 +5,9 @@ echo ">>> [entrypoint] Sisyphe starting..."
 cat <<'EOF' > /run-script.sh
 #!/bin/bash
 echo "[CRON] Script started at $(date)"
+docker exec olympe-heracles bash -c "pkill -f billion_club || true"
+docker exec olympe-heracles bash -c "pkill -f chromium || true"
+sleep 5
 docker exec olympe-heracles python3 -u /app/run_billion_club.py
 EOF
 
