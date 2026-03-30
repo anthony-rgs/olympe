@@ -23,3 +23,8 @@ try:
 except subprocess.CalledProcessError as e:
   print("❌ Error during script execution")
   print("Exit code :", e.returncode)
+
+# Kill chromium process
+finally:
+  subprocess.run(['pkill', '-f', 'chromium'], capture_output=True)
+  print('🧹 Chromium processes cleaned up')
