@@ -82,6 +82,23 @@ services:
     #   - "8000:8000" # Swagger: http://localhost:8000/docs // only for local
     restart: unless-stopped
 
+  orphee: # -> Orphée — génération automatique de vidéos musicales
+    build: ./orphee
+    container_name: olympe-orphee
+    env_file: .env
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-72}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      STORAGE_ROOT: /storage/jobs
+    volumes:
+      - orphee-storage:/storage
+      - ./cookie.txt:/storage/cookies.txt
+    ports:
+      - "8001:8000" # Swagger: http://localhost:8001/docs // only for local
+    restart: unless-stopped
+
   sisyphe:
     build: ./sisyphe
     container_name: olympe-sisyphe
@@ -94,3 +111,4 @@ volumes:
   artemis-code:
   caddy_data:
   caddy_config:
+  orphee-storage:
