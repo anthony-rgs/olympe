@@ -1,14 +1,14 @@
 # Serve HTTPS for the API domain and proxy to the FastAPI service in Docker
 
 # Hermes - API de récupération des données Spotify billions club
-api.spotify-billions.club {
+hermes.olympe.center {
   encode zstd gzip             # Enable compression
   reverse_proxy hermes:8000    # Forward to the 'hermes' container's port 8000
 }
 
 # Orphée — API de génération de vidéos musicales
 # TODO: remplacer par ton vrai domaine
-api.your-domain.com {
+orphee.olympe.center {
   encode zstd gzip             # Enable compression
   reverse_proxy orphee:8000    # Forward to the 'orphee' container's port 8000
 }
