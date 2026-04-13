@@ -10,10 +10,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ffmpeg \
   curl \
-  && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-  && apt-get install -y nodejs \
-  && rm -rf /var/lib/apt/lists/* \
-  && ln -sf /usr/bin/node /usr/local/bin/node
+  unzip \
+  && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
+  && rm -rf /var/lib/apt/lists/*
 
 # Dépendances Python
 COPY requirements.txt .
