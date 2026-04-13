@@ -199,7 +199,12 @@ def download_job(job_id: str):
     raise HTTPException(status_code=404, detail="Fichier final.mp4 introuvable sur le disque.")
 
   filename = f"{job['title']}_{job_id[:8]}.mp4"
-  return FileResponse(path, media_type="video/mp4", filename=filename)
+  return FileResponse(
+    path,
+    media_type="video/mp4",
+    filename=filename,
+    headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
+  )
 
 
 @router.delete("/{job_id}")
