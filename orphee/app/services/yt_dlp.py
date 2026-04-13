@@ -1,5 +1,7 @@
 import asyncio
 import os
+import shutil
+import tempfile
 
 from ..job_store import register_process, unregister_process, update_job, DOWNLOADING
 
@@ -24,7 +26,12 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
   ]
 
   if os.path.isfile(_COOKIES_FILE):
-    cmd += ["--cookies", _COOKIES_FILE]
+    tmp_cookies = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
+    shutil.copy2(_COOKIES_FILE, tmp_cookies.name)
+    tmp_cookies.close()
+    cmd += ["--cookies", tmp_cookies.name]
+  else:
+    tmp_cookies = None
 
   cmd.append(url)
 
@@ -38,6 +45,9 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
 
   stdout, stderr = await process.communicate()
   unregister_process(job_id)
+
+  if tmp_cookies:
+    os.unlink(tmp_cookies.name)
 
   if process.returncode != 0:
     error = stderr.decode().strip().splitlines()[-1] if stderr else "Erreur inconnue"
