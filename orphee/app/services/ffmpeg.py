@@ -664,7 +664,7 @@ def build_filter_complex(
             opacity=_v(ids, "opacity", 1.0),
           )
 
-        title_y_offset = 20 if id_is_emoji else 6
+        title_y_offset = 10 if id_is_emoji else 4
         cv = _overlay_text(
           cv, item["title"],
           fontsize=_v(cs, "size", CLIP_TITLE_FONTSIZE),
