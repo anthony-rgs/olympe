@@ -17,7 +17,6 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
   output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
   cmd = ["yt-dlp", "--no-playlist",
-    "--extractor-args", "youtube:player_client=android_vr,web",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
     "--output", output_template,
