@@ -11,7 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ffmpeg \
   curl \
   unzip \
-  && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
+  && curl -fsSL https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip -o /tmp/deno.zip \
+  && unzip /tmp/deno.zip -d /usr/local/bin \
+  && rm /tmp/deno.zip \
   && rm -rf /var/lib/apt/lists/*
 
 # Dépendances Python
