@@ -18,9 +18,8 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
 
   cmd = ["yt-dlp", "--no-playlist",
     "--extractor-args", "youtube:player_client=web,default",
-    "--format", "bestvideo+bestaudio/bestvideo/best",
+    "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
-    "--remux-video", "mp4",
     "--output", output_template,
   ]
 
