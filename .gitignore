@@ -1,5 +1,6 @@
 .env
 .txt
+cookie.txt
 
 /artemis/collections
 /athena/pgdata
