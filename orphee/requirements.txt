@@ -3,7 +3,6 @@ uvicorn[standard]==0.30.0
 sse-starlette==1.8.2
 yt-dlp[default]>=2024.11.4
 bgutil-ytdlp-pot-provider>=0.8.0
-yt-dlp-youtube-oauth2
 anthropic>=0.40.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
