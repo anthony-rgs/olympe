@@ -82,9 +82,16 @@ services:
     #   - "8000:8000" # Swagger: http://localhost:8000/docs // only for local
     restart: unless-stopped
 
+  bgutil: # -> Serveur PO token pour yt-dlp (anti-bot YouTube)
+    image: brainicism/bgutil-ytdlp-pot-provider
+    container_name: olympe-bgutil
+    restart: unless-stopped
+
   orphee: # -> Orphée — génération automatique de vidéos musicales
     build: ./orphee
     container_name: olympe-orphee
+    depends_on:
+      - bgutil
     env_file: .env
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
@@ -92,6 +99,7 @@ services:
       JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-72}
       CORS_ORIGINS: ${CORS_ORIGINS}
       STORAGE_ROOT: /storage/jobs
+      BGUTIL_PROXY_SERVER_HOST: bgutil
     volumes:
       - orphee-storage:/storage
       - ./cookie.txt:/storage/cookies.txt
