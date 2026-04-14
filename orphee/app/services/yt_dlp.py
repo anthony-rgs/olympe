@@ -6,6 +6,7 @@ import tempfile
 from ..job_store import register_process, unregister_process, update_job, DOWNLOADING
 
 _COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "/storage/cookies.txt")
+_PO_TOKEN = os.getenv("YTDLP_PO_TOKEN", "")
 
 
 async def download(job_id: str, url: str, output_dir: str) -> str:
@@ -20,11 +21,17 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
 
   cmd = ["yt-dlp", "--no-playlist",
     "--remote-components", "ejs:github",
-    "--extractor-args", "youtube:pot_provider=bgutil",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
     "--output", output_template,
   ]
+
+  # bgutil tourne en fond et génère les PO tokens automatiquement
+  # _PO_TOKEN peut surcharger manuellement si besoin
+  extractor_args = "youtube:pot_provider=bgutil"
+  if _PO_TOKEN:
+    extractor_args += f",po_token=web.gvs+{_PO_TOKEN}"
+  cmd += ["--extractor-args", extractor_args]
 
   if os.path.isfile(_COOKIES_FILE):
     tmp_cookies = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
