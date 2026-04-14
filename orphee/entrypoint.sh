@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-BGUTIL_SERVER=$(python3 -c "import bgutil_ytdlp_pot_provider, os; print(os.path.join(os.path.dirname(bgutil_ytdlp_pot_provider.__file__), 'server.js'))")
+BGUTIL_DIR=$(pip show bgutil-ytdlp-pot-provider | grep ^Location | cut -d' ' -f2)/bgutil_ytdlp_pot_provider
+BGUTIL_SERVER="$BGUTIL_DIR/server.js"
 echo "[entrypoint] Starting bgutil PO token server: $BGUTIL_SERVER"
 node "$BGUTIL_SERVER" &
 

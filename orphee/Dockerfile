@@ -23,7 +23,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Installe les dépendances Node.js du serveur bgutil
-RUN BGUTIL_DIR=$(python3 -c "import bgutil_ytdlp_pot_provider, os; print(os.path.dirname(bgutil_ytdlp_pot_provider.__file__))") \
+RUN BGUTIL_DIR=$(pip show bgutil-ytdlp-pot-provider | grep ^Location | cut -d' ' -f2)/bgutil_ytdlp_pot_provider \
   && npm install --prefix "$BGUTIL_DIR" --omit=dev
 
 # Code applicatif
