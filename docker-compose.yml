@@ -87,11 +87,21 @@ services:
     container_name: olympe-bgutil
     restart: unless-stopped
 
+  cookie-refresher: # -> Rafraîchit les cookies YouTube via Playwright à la demande
+    build: ./cookie-refresher
+    container_name: olympe-cookie-refresher
+    environment:
+      YTDLP_COOKIES_FILE: /storage/cookies.txt
+    volumes:
+      - cookies-data:/storage
+    restart: unless-stopped
+
   orphee: # -> Orphée — génération automatique de vidéos musicales
     build: ./orphee
     container_name: olympe-orphee
     depends_on:
       - bgutil
+      - cookie-refresher
     env_file: .env
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
@@ -100,11 +110,13 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       STORAGE_ROOT: /storage/jobs
       BGUTIL_SERVER_URL: http://bgutil:4416
+      YTDLP_COOKIES_FILE: /cookies/cookies.txt
+      COOKIE_REFRESHER_URL: http://cookie-refresher:8080
     volumes:
       - orphee-storage:/storage
       - ./orphee/users.json:/storage/users.json
-      - ./cookie.txt:/storage/cookies.txt
       - ./orphee/yt-dlp-cache:/root/.cache/yt-dlp
+      - cookies-data:/cookies
     ports:
       - "8001:8000" # Swagger: http://localhost:8001/docs // only for local
     restart: unless-stopped
@@ -122,3 +134,4 @@ volumes:
   caddy_data:
   caddy_config:
   orphee-storage:
+  cookies-data:

@@ -27,7 +27,8 @@ def _ping_youtube() -> bool:
 
     req = urllib.request.Request(_KEEPALIVE_URL, method="HEAD")
     with opener.open(req, timeout=10) as resp:
-      print(f"[keepalive] YouTube ping OK (status {resp.status})")
+      jar.save(ignore_discard=True, ignore_expires=True)
+      print(f"[keepalive] YouTube ping OK (status {resp.status}), cookies sauvegardés")
       return True
 
   except Exception as e:
