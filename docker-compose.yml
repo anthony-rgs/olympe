@@ -103,6 +103,7 @@ services:
     volumes:
       - orphee-storage:/storage
       - ./orphee/users.json:/storage/users.json
+      - ./cookie.txt:/storage/cookies.txt
       - ./orphee/yt-dlp-cache:/root/.cache/yt-dlp
     ports:
       - "8001:8000" # Swagger: http://localhost:8001/docs // only for local
