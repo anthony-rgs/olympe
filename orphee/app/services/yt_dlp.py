@@ -2,35 +2,11 @@ import asyncio
 import os
 import shutil
 import tempfile
-import time
-import urllib.request
 
 from ..job_store import register_process, unregister_process, update_job, DOWNLOADING
 
-_COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "/cookies/cookies.txt")
+_COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "/storage/cookies.txt")
 _BGUTIL_URL = os.getenv("BGUTIL_SERVER_URL", "http://bgutil:4416")
-_REFRESHER_URL = os.getenv("COOKIE_REFRESHER_URL", "http://cookie-refresher:8080")
-_COOKIE_MAX_AGE = int(os.getenv("COOKIE_MAX_AGE_SECONDS", "720"))  # 12 min
-
-
-def _refresh_cookies_if_needed():
-  """Appelle le cookie-refresher si les cookies ont plus de 12 min."""
-  if not os.path.isfile(_COOKIES_FILE):
-    print("[yt-dlp] Pas de fichier cookies.")
-    return
-
-  age = time.time() - os.path.getmtime(_COOKIES_FILE)
-  if age < _COOKIE_MAX_AGE:
-    print(f"[yt-dlp] Cookies OK (âge : {int(age)}s)")
-    return
-
-  print(f"[yt-dlp] Cookies trop vieux ({int(age)}s > {_COOKIE_MAX_AGE}s), rafraîchissement...")
-  try:
-    req = urllib.request.Request(f"{_REFRESHER_URL}/refresh", method="POST")
-    with urllib.request.urlopen(req, timeout=60) as resp:
-      print(f"[yt-dlp] Cookies rafraîchis ({resp.read().decode()})")
-  except Exception as e:
-    print(f"[yt-dlp] Échec du rafraîchissement cookies : {e}")
 
 
 async def download(job_id: str, url: str, output_dir: str) -> str:
@@ -40,9 +16,6 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
   Lève une RuntimeError si le téléchargement échoue.
   """
   update_job(job_id, status=DOWNLOADING, message="Téléchargement en cours...")
-
-  # Rafraîchit les cookies si nécessaire avant de télécharger
-  await asyncio.get_event_loop().run_in_executor(None, _refresh_cookies_if_needed)
 
   output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
