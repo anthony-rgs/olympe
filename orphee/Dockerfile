@@ -30,4 +30,4 @@ ENV UVICORN_HOST=0.0.0.0 \
   UVICORN_PORT=8000 \
   UVICORN_LOG_LEVEL=info
 
-CMD ["sh", "-c", "uvicorn app.main:app --host ${UVICORN_HOST} --port ${UVICORN_PORT} --proxy-headers --forwarded-allow-ips='*' --log-level ${UVICORN_LOG_LEVEL}"]
+CMD ["sh", "-c", "node $(python3 -c 'import bgutil_ytdlp_pot_provider, os; print(os.path.join(os.path.dirname(bgutil_ytdlp_pot_provider.__file__), \"server.js\"))') & uvicorn app.main:app --host ${UVICORN_HOST} --port ${UVICORN_PORT} --proxy-headers --forwarded-allow-ips='*' --log-level ${UVICORN_LOG_LEVEL}"]
