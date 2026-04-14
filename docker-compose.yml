@@ -99,7 +99,7 @@ services:
       JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-72}
       CORS_ORIGINS: ${CORS_ORIGINS}
       STORAGE_ROOT: /storage/jobs
-      BGUTIL_PROXY_SERVER_HOST: bgutil
+      BGUTIL_SERVER_URL: http://bgutil:4416
     volumes:
       - orphee-storage:/storage
       - ./cookie.txt:/storage/cookies.txt

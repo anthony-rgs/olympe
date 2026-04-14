@@ -7,6 +7,7 @@ from ..job_store import register_process, unregister_process, update_job, DOWNLO
 
 _COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "/storage/cookies.txt")
 _PO_TOKEN = os.getenv("YTDLP_PO_TOKEN", "")
+_BGUTIL_URL = os.getenv("BGUTIL_SERVER_URL", "http://bgutil:4416")
 
 
 async def download(job_id: str, url: str, output_dir: str) -> str:
@@ -26,12 +27,11 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
     "--output", output_template,
   ]
 
-  # bgutil tourne en fond et génère les PO tokens automatiquement
-  # _PO_TOKEN peut surcharger manuellement si besoin
-  extractor_args = "youtube:pot_provider=bgutil"
+  # bgutil génère les PO tokens automatiquement via son serveur HTTP
+  cmd += ["--extractor-args", f"youtubepot-bgutilhttp:base_url={_BGUTIL_URL}"]
+
   if _PO_TOKEN:
-    extractor_args += f",po_token=web.gvs+{_PO_TOKEN}"
-  cmd += ["--extractor-args", extractor_args]
+    cmd += ["--extractor-args", f"youtube:po_token=web.gvs+{_PO_TOKEN}"]
 
   if os.path.isfile(_COOKIES_FILE):
     tmp_cookies = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
