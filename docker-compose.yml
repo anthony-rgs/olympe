@@ -102,8 +102,8 @@ services:
       BGUTIL_SERVER_URL: http://bgutil:4416
     volumes:
       - orphee-storage:/storage
-      - ./cookie.txt:/storage/cookies.txt
       - ./orphee/users.json:/storage/users.json
+      - ./orphee/yt-dlp-cache:/root/.cache/yt-dlp
     ports:
       - "8001:8000" # Swagger: http://localhost:8001/docs // only for local
     restart: unless-stopped
