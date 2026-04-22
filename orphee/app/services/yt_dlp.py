@@ -27,6 +27,18 @@ def _fmt_time(seconds: float) -> str:
   return f"{h:02d}:{m:02d}:{s:06.3f}"
 
 
+async def _run_ytdlp(cmd: list[str], job_id: str) -> tuple[int, bytes]:
+  process = await asyncio.create_subprocess_exec(
+    *cmd,
+    stdout=asyncio.subprocess.PIPE,
+    stderr=asyncio.subprocess.PIPE,
+  )
+  register_process(job_id, process)
+  _, stderr = await process.communicate()
+  unregister_process(job_id)
+  return process.returncode, stderr
+
+
 async def download(job_id: str, url: str, output_dir: str,
                    start_time: Optional[str] = None, duration: Optional[int] = None) -> str:
   """Télécharge une vidéo via yt-dlp (YouTube, Instagram, TikTok, Vimeo...).
@@ -38,7 +50,7 @@ async def download(job_id: str, url: str, output_dir: str,
 
   output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
-  cmd = [
+  base_cmd = [
     "yt-dlp",
     "--no-playlist",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
@@ -46,36 +58,43 @@ async def download(job_id: str, url: str, output_dir: str,
     "--output", output_template,
   ]
 
-  if start_time and duration is not None:
+  sections_args = []
+  if start_time is not None and duration is not None:
     start_s = _parse_seconds(start_time)
     end_s = start_s + duration + 2  # +2s de buffer pour les keyframes
-    cmd += ["--download-sections", f"*{_fmt_time(start_s)}-{_fmt_time(end_s)}"]
+    sections_args = ["--download-sections", f"*{_fmt_time(start_s)}-{_fmt_time(end_s)}"]
 
-  if os.path.isfile(_COOKIES_FILE):
-    tmp_cookies = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
-    shutil.copy2(_COOKIES_FILE, tmp_cookies.name)
-    tmp_cookies.close()
-    cmd += ["--cookies", tmp_cookies.name]
-  else:
-    tmp_cookies = None
+  def _cookies_args() -> tuple[list[str], Optional[str]]:
+    if os.path.isfile(_COOKIES_FILE):
+      tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
+      shutil.copy2(_COOKIES_FILE, tmp.name)
+      tmp.close()
+      return ["--cookies", tmp.name], tmp.name
+    return [], None
 
-  cmd.append(url)
+  cookies_args, tmp_path = _cookies_args()
 
-  process = await asyncio.create_subprocess_exec(
-    *cmd,
-    stdout=asyncio.subprocess.PIPE,
-    stderr=asyncio.subprocess.PIPE,
-  )
+  # Tente d'abord avec --download-sections, fallback sans si format indisponible
+  cmd = base_cmd + sections_args + cookies_args + [url]
+  returncode, stderr = await _run_ytdlp(cmd, job_id)
 
-  register_process(job_id, process)
+  if returncode != 0 and sections_args:
+    error_msg = stderr.decode()
+    if "requested format is not available" in error_msg or "format" in error_msg.lower():
+      print(f"[yt-dlp] --download-sections incompatible, retry sans sections")
+      # Vide le dossier pour éviter des fichiers partiels
+      for f in os.listdir(output_dir):
+        os.remove(os.path.join(output_dir, f))
+      cookies_args2, tmp_path2 = _cookies_args()
+      cmd2 = base_cmd + cookies_args2 + [url]
+      returncode, stderr = await _run_ytdlp(cmd2, job_id)
+      if tmp_path2:
+        os.unlink(tmp_path2)
 
-  stdout, stderr = await process.communicate()
-  unregister_process(job_id)
+  if tmp_path and os.path.exists(tmp_path):
+    os.unlink(tmp_path)
 
-  if tmp_cookies:
-    os.unlink(tmp_cookies.name)
-
-  if process.returncode != 0:
+  if returncode != 0:
     error = stderr.decode().strip().splitlines()[-1] if stderr else "Erreur inconnue"
     raise RuntimeError(f"yt-dlp a échoué : {error}")
 
