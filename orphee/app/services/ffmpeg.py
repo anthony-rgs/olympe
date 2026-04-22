@@ -1028,11 +1028,7 @@ async def render_video(job_id: str, payload: dict) -> None:
     clips_status[i]["status"] = "downloading"
     update_job(job_id, message=f"Téléchargement {i + 1}/{len(data)} — {item['title']}...", clips=clips_status)
     start_time = item.get("start_time") if not item.get("claude") else None
-    source_file = await yt_dlp.download(
-      job_id, item["url"], raw_subdir,
-      start_time=start_time,
-      duration=item.get("duration"),
-    )
+    source_file = await yt_dlp.download(job_id, item["url"], raw_subdir)
 
     if item.get("claude"):
       raise NotImplementedError(

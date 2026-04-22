@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from ..auth import _FAIL_DELAY, create_token, get_user, require_auth, verify_password
 
 _COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "/storage/cookies.txt")
-_COOKIE_MAX_AGE = int(os.getenv("COOKIE_MAX_AGE_SECONDS", "20"))  # 10 min
+_COOKIE_MAX_AGE = int(os.getenv("COOKIE_MAX_AGE_SECONDS", "600"))  # 10 min
 
 router = APIRouter()
 
