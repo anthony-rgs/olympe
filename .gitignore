@@ -5,3 +5,5 @@ cookie.txt
 /artemis/collections
 /athena/pgdata
 orphee/fonts/Apple-Color-Emoji.ttc
+orphee/users.json
+orphee/yt-dlp-cache/
