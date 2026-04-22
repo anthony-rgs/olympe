@@ -1028,7 +1028,7 @@ async def render_video(job_id: str, payload: dict) -> None:
     clips_status[i]["status"] = "downloading"
     update_job(job_id, message=f"Téléchargement {i + 1}/{len(data)} — {item['title']}...", clips=clips_status)
     start_time = item.get("start_time") if not item.get("claude") else None
-    source_file = await yt_dlp.download(
+    source_file, sections_used = await yt_dlp.download(
       job_id, item["url"], raw_subdir,
       start_time=start_time,
       duration=item.get("duration"),
@@ -1039,8 +1039,10 @@ async def render_video(job_id: str, payload: dict) -> None:
         "Détermination automatique du timestamp via Claude non encore implémentée."
       )
 
+    # Si --download-sections a réussi, les timestamps du fichier commencent à 0
+    extract_start = "00:00:00" if sections_used else start_time
     clip_path = os.path.join(clips_dir, f"clip_{i}.mp4")
-    await extract_clip(job_id, source_file, start_time, item["duration"], clip_path)
+    await extract_clip(job_id, source_file, extract_start, item["duration"], clip_path)
 
     if not os.path.exists(clip_path) or os.path.getsize(clip_path) < 1000:
       raise RuntimeError(

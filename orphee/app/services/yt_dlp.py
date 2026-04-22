@@ -40,7 +40,7 @@ async def _run_ytdlp(cmd: list[str], job_id: str) -> tuple[int, bytes]:
 
 
 async def download(job_id: str, url: str, output_dir: str,
-                   start_time: Optional[str] = None, duration: Optional[int] = None) -> str:
+                   start_time: Optional[str] = None, duration: Optional[int] = None) -> tuple[str, bool]:
   """Télécharge une vidéo via yt-dlp (YouTube, Instagram, TikTok, Vimeo...).
 
   Retourne le chemin du fichier téléchargé.
@@ -75,11 +75,14 @@ async def download(job_id: str, url: str, output_dir: str,
 
   cookies_args, tmp_path = _cookies_args()
 
-  # Tente d'abord avec --download-sections, fallback sans si format indisponible
+  # Tente d'abord avec --download-sections, fallback sans si ça échoue
+  sections_used = False
   cmd = base_cmd + sections_args + cookies_args + [url]
   returncode, stderr = await _run_ytdlp(cmd, job_id)
 
-  if returncode != 0 and sections_args:
+  if returncode == 0 and sections_args:
+    sections_used = True
+  elif returncode != 0 and sections_args:
     print(f"[yt-dlp] --download-sections a échoué, retry sans sections")
     for f in os.listdir(output_dir):
       os.remove(os.path.join(output_dir, f))
@@ -100,4 +103,4 @@ async def download(job_id: str, url: str, output_dir: str,
   if not files:
     raise RuntimeError("yt-dlp n'a produit aucun fichier mp4.")
 
-  return os.path.join(output_dir, files[0])
+  return os.path.join(output_dir, files[0]), sections_used
