@@ -80,17 +80,14 @@ async def download(job_id: str, url: str, output_dir: str,
   returncode, stderr = await _run_ytdlp(cmd, job_id)
 
   if returncode != 0 and sections_args:
-    error_msg = stderr.decode()
-    if "requested format is not available" in error_msg or "format" in error_msg.lower():
-      print(f"[yt-dlp] --download-sections incompatible, retry sans sections")
-      # Vide le dossier pour éviter des fichiers partiels
-      for f in os.listdir(output_dir):
-        os.remove(os.path.join(output_dir, f))
-      cookies_args2, tmp_path2 = _cookies_args()
-      cmd2 = base_cmd + cookies_args2 + [url]
-      returncode, stderr = await _run_ytdlp(cmd2, job_id)
-      if tmp_path2:
-        os.unlink(tmp_path2)
+    print(f"[yt-dlp] --download-sections a échoué, retry sans sections")
+    for f in os.listdir(output_dir):
+      os.remove(os.path.join(output_dir, f))
+    cookies_args2, tmp_path2 = _cookies_args()
+    cmd2 = base_cmd + cookies_args2 + [url]
+    returncode, stderr = await _run_ytdlp(cmd2, job_id)
+    if tmp_path2:
+      os.unlink(tmp_path2)
 
   if tmp_path and os.path.exists(tmp_path):
     os.unlink(tmp_path)
