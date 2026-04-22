@@ -12,6 +12,7 @@ It is composed of small services wired together with `docker compose`.
 > - API: **Hermes**
 > - Database: **Athena** (Postgres)
 > - Reverse proxy & TLS: **Caddy**
+> - Video generation API: **Orphée**
 > - Front‑end (separate repo): **Elysium** — https://spotify-billions.club
 
 ## 🧩 Services at a glance
@@ -41,6 +42,11 @@ It is composed of small services wired together with `docker compose`.
 - **sisyphe** — _Scheduler (cron/automation)_  
   Periodically triggers scripts (often via `docker exec` on Heracles).  
   Needs access to Docker socket: `/var/run/docker.sock`.
+
+- **orphée** — _Automated video generation API_  
+  Generates short-form 9:16 videos from music clips. Downloads source videos via `yt-dlp`, cuts clips, and assembles the final render with `ffmpeg`. Exposes a JWT-authenticated REST API with SSE streaming for job status.  
+  Env: `ANTHROPIC_API_KEY`, `JWT_SECRET`, `JWT_EXPIRE_HOURS`, `CORS_ORIGINS`, `STORAGE_ROOT`.  
+  Requires a `cookie.txt` (Netscape format) mounted at `/storage/cookies.txt` for YouTube authentication.
 
 ---
 
@@ -132,9 +138,10 @@ docker compose exec athena pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.s
 - Scraper — **Artemis**: goddess of the hunt and the wilderness → “hunts” the data
 - Database — **Athena**: goddess of wisdom and strategic warfare → centralized knowledge base
 - Ingestion to DB — **Owl**: Athena’s owl, symbol of insight → ferries data into Athena
-- Script runner — **Heracles**: hero of the Twelve Labors → executes heavy tas
+- Script runner — **Heracles**: hero of the Twelve Labors → executes heavy tasks
 - Cron — **Sisyphe**: condemned to repeat the same act endlessly → recurring scheduling
 - API — **Hermes**: messenger of the gods, deity of travel and exchange → delivers data to the outside world
+- Video generation — **Orphée**: poet and musician of Greek mythology, enchanting all with his music → crafts videos from raw clips
 - Website — **Elysium**: realm of heroes / virtuous souls → the showcase for the “best” data
 
 ---

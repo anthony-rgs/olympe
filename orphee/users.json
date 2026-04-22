@@ -1,0 +1,10 @@
+[
+  {
+    "username": "anthony",
+    "password_hash": "REMPLACER_PAR_UN_HASH_BCRYPT"
+  },
+  {
+    "username": "recruteur",
+    "password_hash": "REMPLACER_PAR_UN_HASH_BCRYPT"
+  }
+]

@@ -2,14 +2,33 @@ import asyncio
 import os
 import shutil
 import tempfile
+from typing import Optional
 
 from ..job_store import register_process, unregister_process, update_job, DOWNLOADING
 
 _COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "/storage/cookies.txt")
-_BGUTIL_URL = os.getenv("BGUTIL_SERVER_URL", "http://bgutil:4416")
 
 
-async def download(job_id: str, url: str, output_dir: str) -> str:
+def _parse_seconds(time_str: str) -> float:
+  """Convertit HH:MM:SS ou MM:SS en secondes."""
+  parts = [float(p) for p in time_str.strip().split(":")]
+  if len(parts) == 3:
+    return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  if len(parts) == 2:
+    return parts[0] * 60 + parts[1]
+  return parts[0]
+
+
+def _fmt_time(seconds: float) -> str:
+  """Convertit des secondes en HH:MM:SS.mmm."""
+  h = int(seconds // 3600)
+  m = int((seconds % 3600) // 60)
+  s = seconds % 60
+  return f"{h:02d}:{m:02d}:{s:06.3f}"
+
+
+async def download(job_id: str, url: str, output_dir: str,
+                   start_time: Optional[str] = None, duration: Optional[int] = None) -> str:
   """Télécharge une vidéo via yt-dlp (YouTube, Instagram, TikTok, Vimeo...).
 
   Retourne le chemin du fichier téléchargé.
@@ -22,12 +41,15 @@ async def download(job_id: str, url: str, output_dir: str) -> str:
   cmd = [
     "yt-dlp",
     "--no-playlist",
-    "--remote-components", "ejs:github",
-    "--extractor-args", f"youtubepot-bgutilhttp:base_url={_BGUTIL_URL}",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
     "--output", output_template,
   ]
+
+  if start_time and duration is not None:
+    start_s = _parse_seconds(start_time)
+    end_s = start_s + duration + 2  # +2s de buffer pour les keyframes
+    cmd += ["--download-sections", f"*{_fmt_time(start_s)}-{_fmt_time(end_s)}"]
 
   if os.path.isfile(_COOKIES_FILE):
     tmp_cookies = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
