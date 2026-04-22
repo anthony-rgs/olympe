@@ -55,6 +55,7 @@ async def download(job_id: str, url: str, output_dir: str,
     "--no-playlist",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
+    "--remote-components", "ejs:github",
     "--output", output_template,
   ]
 
