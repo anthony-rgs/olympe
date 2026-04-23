@@ -4,14 +4,14 @@
 
 hermes.olympe.center {
 encode zstd gzip # Enable compression
-reverse_proxy hermes:8000 # Forward to the 'hermes' container's port 8000
+reverse_proxy olympe-hermes:8000 # Forward to the 'hermes' container's port 8000
 }
 
 # Orphée — API de génération de vidéos musicales
 
 orphee.olympe.center {
 encode zstd gzip # Enable compression
-reverse_proxy orphee:8000 # Forward to the 'orphee' container's port 8000
+reverse_proxy olympe-orphee:8000 # Forward to the 'orphee' container's port 8000
 }
 
 # Redirections
