@@ -1,14 +1,49 @@
 # Serve HTTPS for the API domain and proxy to the FastAPI service in Docker
 
 # Hermes - API de récupération des données Spotify billions club
+
 hermes.olympe.center {
-  encode zstd gzip             # Enable compression
-  reverse_proxy hermes:8000    # Forward to the 'hermes' container's port 8000
+encode zstd gzip # Enable compression
+reverse_proxy hermes:8000 # Forward to the 'hermes' container's port 8000
 }
 
 # Orphée — API de génération de vidéos musicales
-# TODO: remplacer par ton vrai domaine
+
 orphee.olympe.center {
-  encode zstd gzip             # Enable compression
-  reverse_proxy orphee:8000    # Forward to the 'orphee' container's port 8000
+encode zstd gzip # Enable compression
+reverse_proxy orphee:8000 # Forward to the 'orphee' container's port 8000
+}
+
+# Redirections
+
+artemis-code.olympe.center {
+redir https://github.com/anthony-rgs/artemis permanent
+}
+
+elysium.olympe.center {
+redir https://spotify-billions.club/ permanent
+}
+
+elysium-code.olympe.center {
+redir https://github.com/anthony-rgs/elysium permanent
+}
+
+hephaistos.olympe.center {
+redir https://vexia.studio/ permanent
+}
+
+hephaistos-code.olympe.center {
+redir https://github.com/anthony-rgs/hephaistos permanent
+}
+
+ambrosia.olympe.center {
+redir https://chromewebstore.google.com/detail/ambrosia/jpabbbaemgkidilifjlfdnpniphihgle?authuser=0&hl=fr permanent
+}
+
+ambrosia-code.olympe.center {
+redir https://github.com/anthony-rgs/ambrosia permanent
+}
+
+olympe-code.olympe.center {
+redir https://github.com/anthony-rgs/olympe permanent
 }
