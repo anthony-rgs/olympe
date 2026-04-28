@@ -276,6 +276,7 @@ async def _run_render_pipeline(
   except asyncio.CancelledError:
     pass
   except Exception as e:
+    print(f"[pipeline] job={job_id} FAILED: {e}")
     update_job(job_id, status=FAILED, error=str(e), message=f"Erreur : {e}")
     purge_job(job_id)
     await db_delete_job(job_id)
