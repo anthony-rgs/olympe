@@ -54,10 +54,11 @@ async def download(job_id: str, url: str, output_dir: str,
     "--merge-output-format", "mp4",
     "--output", output_template,
   ]
+  bgutil_arg = ["--extractor-args", "youtubepot-bgutilhttp:base_url=http://olympe-bgutil:4416"]
   if cookies_file:
-    base_cmd += ["--cookies", cookies_file, "--extractor-args", "youtube:player_client=web"]
+    base_cmd += ["--cookies", cookies_file, "--extractor-args", "youtube:player_client=web"] + bgutil_arg
   else:
-    base_cmd += ["--extractor-args", "youtube:player_client=android_vr"]
+    base_cmd += ["--extractor-args", "youtube:player_client=android_vr"] + bgutil_arg
 
   sections_args = []
   if start_time is not None and duration is not None:
