@@ -56,7 +56,7 @@ async def download(job_id: str, url: str, output_dir: str,
       "--output", output_template,
     ]
     if use_cookies and cookies_file:
-      cmd += ["--cookies", cookies_file]
+      cmd += ["--cookies", cookies_file, "--extractor-args", "youtube:player_client=web"]
     else:
       cmd += ["--extractor-args", "youtube:player_client=android_vr"]
     return cmd
