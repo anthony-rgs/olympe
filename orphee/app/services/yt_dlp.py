@@ -47,34 +47,54 @@ async def download(job_id: str, url: str, output_dir: str,
 
   output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
-  base_cmd = [
-    "yt-dlp",
-    "--no-playlist",
-    "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
-    "--merge-output-format", "mp4",
-    "--extractor-args", "youtube:player_client=android_vr",
-    "--output", output_template,
-  ]
+  def _build_base_cmd(use_cookies: bool) -> list[str]:
+    cmd = [
+      "yt-dlp",
+      "--no-playlist",
+      "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
+      "--merge-output-format", "mp4",
+      "--output", output_template,
+    ]
+    if use_cookies and cookies_file:
+      cmd += ["--cookies", cookies_file]
+    else:
+      cmd += ["--extractor-args", "youtube:player_client=android_vr"]
+    return cmd
 
   sections_args = []
   if start_time is not None and duration is not None:
     start_s = _parse_seconds(start_time)
-    end_s = start_s + duration + 2  # +2s de buffer pour les keyframes
+    end_s = start_s + duration + 2
     sections_args = ["--download-sections", f"*{_fmt_time(start_s)}-{_fmt_time(end_s)}"]
 
-  # Tente d'abord avec --download-sections, fallback sans si ça échoue
+  def _clear_dir():
+    for f in os.listdir(output_dir):
+      os.remove(os.path.join(output_dir, f))
+
+  # 1) android_vr sans cookies + sections
+  base_cmd = _build_base_cmd(use_cookies=False)
   sections_used = False
-  cmd = base_cmd + sections_args + [url]
-  returncode, stderr = await _run_ytdlp(cmd, job_id)
+  returncode, stderr = await _run_ytdlp(base_cmd + sections_args + [url], job_id)
 
   if returncode == 0 and sections_args:
     sections_used = True
   elif returncode != 0 and sections_args:
+    # 2) android_vr sans sections
     print(f"[yt-dlp] --download-sections a échoué, retry sans sections")
-    for f in os.listdir(output_dir):
-      os.remove(os.path.join(output_dir, f))
-    cmd2 = base_cmd + [url]
-    returncode, stderr = await _run_ytdlp(cmd2, job_id)
+    _clear_dir()
+    returncode, stderr = await _run_ytdlp(base_cmd + [url], job_id)
+
+  # 3) Si toujours en échec et cookies dispo → web client + cookies
+  if returncode != 0 and cookies_file:
+    print(f"[yt-dlp] android_vr a échoué, retry avec cookies (web client)")
+    _clear_dir()
+    base_cmd_cookies = _build_base_cmd(use_cookies=True)
+    returncode, stderr = await _run_ytdlp(base_cmd_cookies + sections_args + [url], job_id)
+    if returncode == 0 and sections_args:
+      sections_used = True
+    elif returncode != 0 and sections_args:
+      _clear_dir()
+      returncode, stderr = await _run_ytdlp(base_cmd_cookies + [url], job_id)
 
   if returncode != 0:
     error = stderr.decode().strip().splitlines()[-1] if stderr else "Erreur inconnue"
