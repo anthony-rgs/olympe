@@ -3,7 +3,7 @@ import os
 
 from ..job_store import (
   register_process, unregister_process, update_job,
-  final_path, PROCESSING,
+  final_path, cleanup_job_artifacts, PROCESSING,
 )
 from . import text_render
 
@@ -991,18 +991,18 @@ def build_filter_complex(
   return fc, extra_inputs
 
 
-async def render_video(job_id: str, payload: dict) -> None:
+async def render_video(job_id: str, user_id: str, payload: dict, cookies_file: str | None) -> None:
   """Télécharge, découpe, concatène les clips et assemble la vidéo finale."""
   from ..config import STORAGE_ROOT
   from . import yt_dlp
 
-  data           = payload["data"]
-  title          = payload["title"]
+  data       = payload["data"]
+  title      = payload["title"]
   template   = payload.get("template", "top")
-  teaser_top     = payload.get("teaserTop", False) and template == "top" and len(data) > 1
+  teaser_top = payload.get("teaserTop", False) and template == "top" and len(data) > 1
 
-  clips_dir = os.path.join(STORAGE_ROOT, job_id, "clips")
-  out_path  = final_path(job_id)
+  clips_dir = os.path.join(STORAGE_ROOT, user_id, job_id, "clips")
+  out_path  = final_path(user_id, job_id)
 
   os.makedirs(clips_dir, exist_ok=True)
 
@@ -1022,7 +1022,7 @@ async def render_video(job_id: str, payload: dict) -> None:
       update_job(job_id, clips=clips_status)
       continue
 
-    raw_subdir = os.path.join(STORAGE_ROOT, job_id, "raw", str(i))
+    raw_subdir = os.path.join(STORAGE_ROOT, user_id, job_id, "raw", str(i))
     os.makedirs(raw_subdir, exist_ok=True)
 
     clips_status[i]["status"] = "downloading"
@@ -1030,6 +1030,7 @@ async def render_video(job_id: str, payload: dict) -> None:
     start_time = item.get("start_time") if not item.get("claude") else None
     source_file, sections_used = await yt_dlp.download(
       job_id, item["url"], raw_subdir,
+      cookies_file=cookies_file,
       start_time=start_time,
       duration=item.get("duration"),
     )
@@ -1057,7 +1058,7 @@ async def render_video(job_id: str, payload: dict) -> None:
   # ── 2. Assemblage final (concat filter + overlays en une seule passe) ────────
   update_job(job_id, status=PROCESSING, message="Assemblage final...")
 
-  overlay_dir = os.path.join(STORAGE_ROOT, job_id, "overlays")
+  overlay_dir = os.path.join(STORAGE_ROOT, user_id, job_id, "overlays")
   os.makedirs(overlay_dir, exist_ok=True)
 
   # highlightActive et teaserTop sont exclusifs au template "top"
@@ -1101,3 +1102,4 @@ async def render_video(job_id: str, payload: dict) -> None:
   ])
 
   await _run(job_id, *cmd)
+  cleanup_job_artifacts(user_id, job_id)

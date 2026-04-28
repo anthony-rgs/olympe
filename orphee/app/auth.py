@@ -1,48 +1,48 @@
 import asyncio
-import json
-import os
 from datetime import datetime, timedelta, timezone
 
+import psycopg
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from .config import JWT_EXPIRE_HOURS, JWT_SECRET, USERS_FILE
+from .config import JWT_EXPIRE_HOURS, JWT_SECRET
+from .db import get_db
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer = HTTPBearer(auto_error=False)
 
-# Délai anti brute-force en secondes
 _FAIL_DELAY = 3
 
 
-# ── Gestion des utilisateurs ──────────────────────────────────────────────────
+# ── Utilisateurs ──────────────────────────────────────────────────────────────
 
-def _load_users() -> list[dict]:
-  """Charge la liste des utilisateurs depuis users.json."""
-  if not os.path.exists(USERS_FILE):
-    return []
-  with open(USERS_FILE) as f:
-    return json.load(f)
+async def get_user_by_username(conn: psycopg.AsyncConnection, username: str) -> dict | None:
+  async with conn.cursor() as cur:
+    await cur.execute("SELECT * FROM orphee_users WHERE username = %s", (username,))
+    return await cur.fetchone()
 
 
-def get_user(username: str) -> dict | None:
-  """Retourne un utilisateur par son username, ou None s'il n'existe pas."""
-  return next((u for u in _load_users() if u["username"] == username), None)
+async def get_user_by_id(conn: psycopg.AsyncConnection, user_id: str) -> dict | None:
+  async with conn.cursor() as cur:
+    await cur.execute("SELECT * FROM orphee_users WHERE id = %s", (user_id,))
+    return await cur.fetchone()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
   return _pwd_context.verify(plain, hashed)
 
+def hash_password(plain: str) -> str:
+  return _pwd_context.hash(plain)
+
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 
-def create_token(username: str) -> str:
-  """Crée un JWT signé valable JWT_EXPIRE_HOURS heures."""
+def create_token(user_id: str, username: str, token_version: int) -> str:
   expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
   return jwt.encode(
-    {"sub": username, "exp": expire},
+    {"sub": str(user_id), "username": username, "tv": token_version, "exp": expire},
     JWT_SECRET,
     algorithm="HS256",
   )
@@ -52,28 +52,29 @@ def create_token(username: str) -> str:
 
 async def require_auth(
   credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+  conn: psycopg.AsyncConnection = Depends(get_db),
 ) -> dict:
-  """Dépendance injectée sur toutes les routes protégées.
-
-  Vérifie le JWT dans le header Authorization: Bearer <token>.
-  Retourne le dict utilisateur si valide, lève 401 sinon.
-  """
   if not credentials:
     await asyncio.sleep(_FAIL_DELAY)
     raise HTTPException(status_code=401, detail="Token manquant. Connecte-toi via POST /auth/login.")
 
   try:
     payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
-    username: str = payload.get("sub")
-    if not username:
+    user_id: str = payload.get("sub")
+    token_version: int = payload.get("tv")
+    if not user_id or token_version is None:
       raise JWTError()
   except JWTError:
     await asyncio.sleep(_FAIL_DELAY)
     raise HTTPException(status_code=401, detail="Token invalide ou expiré.")
 
-  user = get_user(username)
+  user = await get_user_by_id(conn, user_id)
   if not user:
     await asyncio.sleep(_FAIL_DELAY)
     raise HTTPException(status_code=401, detail="Utilisateur introuvable.")
 
-  return user
+  if user["token_version"] != token_version:
+    await asyncio.sleep(_FAIL_DELAY)
+    raise HTTPException(status_code=401, detail="Token révoqué.")
+
+  return dict(user)

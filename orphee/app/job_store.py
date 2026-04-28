@@ -6,9 +6,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from .config import STORAGE_ROOT
+import psycopg
+from psycopg.rows import dict_row
 
-# Statuts possibles d'un job Orphée
+from .config import DATABASE_URL, STORAGE_ROOT
+
 PENDING     = "pending"
 DOWNLOADING = "downloading"
 PROCESSING  = "processing"
@@ -23,41 +25,38 @@ _jobs: dict[str, dict] = {}
 _processes: dict[str, asyncio.subprocess.Process] = {}
 
 
-def _job_dir(job_id: str) -> str:
-  return os.path.join(STORAGE_ROOT, job_id)
+def _job_dir(user_id: str, job_id: str) -> str:
+  return os.path.join(STORAGE_ROOT, user_id, job_id)
 
-def _job_file(job_id: str) -> str:
-  return os.path.join(_job_dir(job_id), "job.json")
+def _job_file(user_id: str, job_id: str) -> str:
+  return os.path.join(_job_dir(user_id, job_id), "job.json")
+
+def final_path(user_id: str, job_id: str) -> str:
+  return os.path.join(_job_dir(user_id, job_id), "final.mp4")
 
 
-def purge_all_jobs() -> None:
-  """Vide entièrement STORAGE_ROOT (jobs uniquement) et le store en mémoire."""
-  try:
-    for entry in os.scandir(STORAGE_ROOT):
-      if entry.is_dir():
-        shutil.rmtree(entry.path, ignore_errors=True)
-      else:
-        os.remove(entry.path)
-  except FileNotFoundError:
-    pass
-  _jobs.clear()
+def cleanup_job_artifacts(user_id: str, job_id: str) -> None:
+  """Supprime raw/, clips/ et overlays/ après un render réussi — garde final.mp4."""
+  job_dir = _job_dir(user_id, job_id)
+  for sub in ("raw", "clips", "overlays"):
+    path = os.path.join(job_dir, sub)
+    if os.path.isdir(path):
+      shutil.rmtree(path, ignore_errors=True)
 
 
 def purge_job(job_id: str) -> None:
   """Supprime le répertoire d'un job sur disque et le retire du store en mémoire."""
-  try:
-    shutil.rmtree(_job_dir(job_id), ignore_errors=True)
-  except Exception:
-    pass
-  _jobs.pop(job_id, None)
+  job = _jobs.pop(job_id, None)
+  if job:
+    shutil.rmtree(_job_dir(job["user_id"], job_id), ignore_errors=True)
 
 
-def create_job(title: Optional[str]) -> dict:
-  """Crée un nouveau job Orphée et initialise son répertoire sur disque."""
-  purge_all_jobs()
+def create_job(user_id: str, title: Optional[str]) -> dict:
+  """Crée un nouveau job et initialise son répertoire sur disque."""
   job_id = str(uuid.uuid4())
   job = {
     "job_id":     job_id,
+    "user_id":    user_id,
     "status":     PENDING,
     "title":      title,
     "created_at": datetime.now(timezone.utc).isoformat(),
@@ -65,19 +64,21 @@ def create_job(title: Optional[str]) -> dict:
     "error":      None,
   }
 
-  # Création des sous-répertoires de stockage
   for sub in ("raw", "clips"):
-    os.makedirs(os.path.join(_job_dir(job_id), sub), exist_ok=True)
+    os.makedirs(os.path.join(_job_dir(user_id, job_id), sub), exist_ok=True)
 
   _jobs[job_id] = job
   _persist(job)
   return job
 
 
-def get_active_job() -> Optional[dict]:
-  """Retourne le job actif (pending/downloading/processing) s'il en existe un."""
+def get_active_job_for_user(user_id: str) -> Optional[dict]:
   active = {PENDING, DOWNLOADING, PROCESSING}
-  return next((j for j in _jobs.values() if j["status"] in active), None)
+  return next((j for j in _jobs.values() if j["user_id"] == user_id and j["status"] in active), None)
+
+def get_active_jobs_for_user(user_id: str) -> list[dict]:
+  active = {PENDING, DOWNLOADING, PROCESSING}
+  return [j for j in _jobs.values() if j["user_id"] == user_id and j["status"] in active]
 
 
 def get_job(job_id: str) -> Optional[dict]:
@@ -123,15 +124,89 @@ def cancel_job(job_id: str) -> bool:
   return True
 
 
-def final_path(job_id: str) -> str:
-  """Chemin vers le fichier final.mp4 d'un job."""
-  return os.path.join(_job_dir(job_id), "final.mp4")
+# ── Helpers DB appelés depuis les background tasks ────────────────────────────
+
+async def db_insert_job(job_id: str, user_id: str, title: str) -> None:
+  async with await psycopg.AsyncConnection.connect(DATABASE_URL, row_factory=dict_row) as conn:
+    await conn.execute(
+      "INSERT INTO orphee_jobs (id, user_id, title, status) VALUES (%s, %s, %s, 'pending')",
+      (job_id, user_id, title),
+    )
+
+async def db_update_job_status(job_id: str, status: str, error: Optional[str] = None, file_size_bytes: Optional[int] = None, duration_seconds: Optional[int] = None) -> None:
+  async with await psycopg.AsyncConnection.connect(DATABASE_URL, row_factory=dict_row) as conn:
+    await conn.execute(
+      "UPDATE orphee_jobs SET status = %s, error = %s, file_size_bytes = %s, duration_seconds = %s WHERE id = %s",
+      (status, error, file_size_bytes, duration_seconds, job_id),
+    )
+
+async def db_get_job(job_id: str) -> Optional[dict]:
+  async with await psycopg.AsyncConnection.connect(DATABASE_URL, row_factory=dict_row) as conn:
+    async with conn.cursor() as cur:
+      await cur.execute("SELECT * FROM orphee_jobs WHERE id = %s", (job_id,))
+      row = await cur.fetchone()
+  return dict(row) if row else None
+
+async def db_delete_job(job_id: str) -> None:
+  async with await psycopg.AsyncConnection.connect(DATABASE_URL, row_factory=dict_row) as conn:
+    await conn.execute("DELETE FROM orphee_jobs WHERE id = %s", (job_id,))
+
+async def db_cleanup_max_jobs(user_id: str, max_jobs: int) -> None:
+  """Supprime les jobs DONE les plus anciens si le quota est dépassé."""
+  import shutil as _shutil
+  async with await psycopg.AsyncConnection.connect(DATABASE_URL, row_factory=dict_row) as conn:
+    async with conn.cursor() as cur:
+      await cur.execute(
+        "SELECT id FROM orphee_jobs WHERE user_id = %s AND status = 'done' ORDER BY created_at ASC",
+        (user_id,),
+      )
+      done_jobs = await cur.fetchall()
+
+    excess = len(done_jobs) - max_jobs
+    if excess <= 0:
+      return
+
+    for job in done_jobs[:excess]:
+      job_dir = os.path.join(STORAGE_ROOT, user_id, str(job["id"]))
+      if os.path.isdir(job_dir):
+        _shutil.rmtree(job_dir, ignore_errors=True)
+
+    ids = [str(j["id"]) for j in done_jobs[:excess]]
+    async with conn.cursor() as cur:
+      await cur.execute("DELETE FROM orphee_jobs WHERE id = ANY(%s)", (ids,))
+
+
+async def db_increment_user_metrics(user_id: str, duration_seconds: int, clips_used: int) -> None:
+  async with await psycopg.AsyncConnection.connect(DATABASE_URL, row_factory=dict_row) as conn:
+    await conn.execute(
+      """
+      UPDATE orphee_users SET
+        total_videos_created   = total_videos_created   + 1,
+        total_duration_seconds = total_duration_seconds + %s,
+        total_clips_used       = total_clips_used       + %s
+      WHERE id = %s
+      """,
+      (duration_seconds, clips_used, user_id),
+    )
+
+
+async def db_increment_metrics(duration_seconds: int, clips_used: int) -> None:
+  async with await psycopg.AsyncConnection.connect(DATABASE_URL, row_factory=dict_row) as conn:
+    await conn.execute(
+      """
+      UPDATE orphee_metrics SET
+        total_videos_created   = total_videos_created   + 1,
+        total_duration_seconds = total_duration_seconds + %s,
+        total_clips_used       = total_clips_used       + %s
+      """,
+      (duration_seconds, clips_used),
+    )
 
 
 def _persist(job: dict) -> None:
-  """Écrit l'état du job dans job.json pour survivre aux redémarrages."""
+  """Écrit l'état du job dans job.json pour inspection manuelle."""
   try:
-    with open(_job_file(job["job_id"]), "w") as f:
+    with open(_job_file(job["user_id"], job["job_id"]), "w") as f:
       json.dump(job, f, indent=2)
   except OSError:
     pass

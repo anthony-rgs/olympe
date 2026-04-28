@@ -1,17 +1,24 @@
 import asyncio
 import json
 import os
-import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from ..auth import require_auth
+import shutil
+
+from ..config import COOKIES_DIR, STORAGE_ROOT
+from ..db import get_db
 from ..job_store import (
   CANCELLED, DONE, FAILED,
-  _jobs,
-  cancel_job, create_job, final_path, get_active_job, get_job, purge_job, update_job,
+  cancel_job, create_job, db_cleanup_max_jobs, db_delete_job, db_get_job, db_insert_job,
+  db_increment_metrics, db_increment_user_metrics, db_update_job_status,
+  final_path, get_active_job_for_user, get_job, purge_job, update_job,
 )
 from ..services import ffmpeg
 
@@ -37,11 +44,11 @@ class SubtitleStyle(BaseModel):
 
 
 class ClipTitleStyle(BaseModel):
-  animation: str = "fade"        # "fade" | "none" | "slide-left" | "slide-bottom" | "typewriter"
+  animation: str = "fade"
   border: Optional[int] = None
   color: Optional[str] = None
   font: Optional[str] = None
-  position: str = "left"         # "left" | "center"
+  position: str = "left"
   size: Optional[int] = None
   opacity: Optional[float] = None
 
@@ -63,7 +70,7 @@ class ClipIdStyle(BaseModel):
 
 
 class ClipItem(BaseModel):
-  id: str                        # string — chiffre, lettre, emoji...
+  id: str
   idStyle: Optional[ClipIdStyle] = None
   url: str
   title: str
@@ -71,7 +78,7 @@ class ClipItem(BaseModel):
   subtitleStyle: Optional[ClipTitleStyle] = None
   duration: int
   claude: bool = False
-  start_time: Optional[str] = None   # obligatoire si claude=false
+  start_time: Optional[str] = None
   titleStyle: Optional[ClipTitleStyle] = None
 
 
@@ -82,40 +89,42 @@ class HighlightActive(BaseModel):
 
 class RenderRequest(BaseModel):
   title: VideoTitle
-  template: str = "top"              # "top" | "classic" | "minimal" | "expanded"
+  template: str = "top"
   highlightActive: Optional[HighlightActive] = None
   teaserTop: bool = False
-  smoothTransition: Optional[dict] = None  # {"active": bool, "duration": float}
-  background: str = "video"               # "video" | "0xRRGGBB"
-  watermark: Optional[dict] = None        # {"active": bool, "text": str, "color": str, "font": str, "size": int}
-  spacing: Optional[int] = None           # gap (px) entre title/subtitle et la vidéo (classic/minimal/expanded)
-  videoMargin: Optional[int] = None       # marge (px) à gauche et droite de la vidéo (top, classic, minimal)
+  smoothTransition: Optional[dict] = None
+  background: str = "video"
+  watermark: Optional[dict] = None
+  spacing: Optional[int] = None
+  videoMargin: Optional[int] = None
   data: list[ClipItem]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/render", status_code=201)
-async def create_render_job(body: RenderRequest, background_tasks: BackgroundTasks):
+async def create_render_job(
+  body: RenderRequest,
+  background_tasks: BackgroundTasks,
+  user: dict = Depends(require_auth),
+):
   """Crée un job de rendu multi-clips (pipeline 9:16)."""
   if not body.data:
     raise HTTPException(status_code=400, detail="Le tableau data est vide.")
 
   if body.template not in ("top", "classic", "minimal", "expanded"):
-    raise HTTPException(
-      status_code=400,
-      detail=f"template invalide : '{body.template}'. Valeurs : top, classic, minimal, expanded.",
-    )
+    raise HTTPException(status_code=400, detail=f"template invalide : '{body.template}'.")
 
   for item in body.data:
-    has_start = bool(item.start_time and item.start_time.strip())
-    if not has_start and not item.claude:
+    if not (item.start_time and item.start_time.strip()) and not item.claude:
       raise HTTPException(
         status_code=400,
         detail=f"Clip id={item.id} doit avoir soit un start_time, soit claude=true.",
       )
 
-  active = get_active_job()
+  user_id = str(user["id"])
+
+  active = get_active_job_for_user(user_id)
   if active:
     raise HTTPException(
       status_code=409,
@@ -126,19 +135,19 @@ async def create_render_job(body: RenderRequest, background_tasks: BackgroundTas
       },
     )
 
-  def _slugify(s: str) -> str:
-    s = s.lower().strip()
-    s = re.sub(r"[^a-z0-9\s-]", "", s)
-    return re.sub(r"[\s]+", "-", s)
+  now = datetime.now(ZoneInfo("Europe/Paris"))
+  slug = f"{body.template}-{user['username']}-{now.strftime('%Y-%m-%d-%Hh%M')}"
 
-  parts = [body.title.first]
-  if body.title.second:
-    parts.append(body.title.second)
-  slug = _slugify(" ".join(parts))
+  job = create_job(user_id=user_id, title=slug)
+  await db_insert_job(job["job_id"], user_id, slug)
 
-  job = create_job(title=slug)
+  cookies_file = os.path.join(COOKIES_DIR, f"{user_id}.txt")
+  if not os.path.isfile(cookies_file):
+    cookies_file = None
+
   payload = body.model_dump()
-  background_tasks.add_task(_run_render_pipeline, job["job_id"], payload)
+  background_tasks.add_task(_run_render_pipeline, job["job_id"], user_id, user["max_jobs"], cookies_file, payload)
+
   return {
     "job_id":     job["job_id"],
     "status":     job["status"],
@@ -148,53 +157,66 @@ async def create_render_job(body: RenderRequest, background_tasks: BackgroundTas
   }
 
 
-
 @router.get("/last")
-def get_last_job():
-  """Retourne le dernier job (actif ou terminé), ou 404 si aucun."""
-  job = next(
-    (j for j in sorted(_jobs.values(), key=lambda j: j["created_at"], reverse=True)),
-    None,
-  )
+async def get_last_job(
+  user: dict = Depends(require_auth),
+  conn = Depends(get_db),
+):
+  """Retourne le dernier job de l'utilisateur connecté."""
+  async with conn.cursor() as cur:
+    await cur.execute(
+      """
+      SELECT id, title, status, created_at, updated_at, error
+      FROM orphee_jobs
+      WHERE user_id = %s
+      ORDER BY created_at DESC
+      LIMIT 1
+      """,
+      (str(user["id"]),),
+    )
+    job = await cur.fetchone()
+
   if not job:
     raise HTTPException(status_code=404, detail="Aucun job trouvé.")
+
   return {
-    "job_id":     job["job_id"],
+    "job_id":     str(job["id"]),
     "title":      job["title"],
+    "status":     job["status"],
     "created_at": job["created_at"],
     "updated_at": job["updated_at"],
   }
 
 
 @router.get("/{job_id}/stream")
-async def stream_job(job_id: str):
+async def stream_job(job_id: str, user: dict = Depends(require_auth)):
   """SSE — suit l'avancement d'un job en temps réel jusqu'à sa fin."""
   job = get_job(job_id)
   if not job:
     raise HTTPException(status_code=404, detail="Job introuvable.")
+  if job["user_id"] != str(user["id"]):
+    raise HTTPException(status_code=403, detail="Accès refusé.")
 
   return StreamingResponse(
     _sse_generator(job_id),
     media_type="text/event-stream",
-    headers={
-      "Cache-Control": "no-cache",
-      "X-Accel-Buffering": "no",  # désactive le buffering Caddy/Nginx
-    },
+    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
   )
 
 
 @router.get("/{job_id}/download")
-def download_job(job_id: str):
+async def download_job(job_id: str, user: dict = Depends(require_auth)):
   """Télécharge le final.mp4 d'un job terminé."""
-  job = get_job(job_id)
+  job = get_job(job_id) or await db_get_job(job_id)
   if not job:
     raise HTTPException(status_code=404, detail="Job introuvable.")
+  if str(job["user_id"]) != str(user["id"]) and not user["is_admin"]:
+    raise HTTPException(status_code=403, detail="Accès refusé.")
   if job["status"] != DONE:
-    raise HTTPException(
-      status_code=409,
-      detail=f"La vidéo n'est pas encore prête (statut : {job['status']}).",
-    )
-  path = final_path(job_id)
+    raise HTTPException(status_code=409, detail=f"La vidéo n'est pas encore prête (statut : {job['status']}).")
+
+  user_id = str(job["user_id"])
+  path = final_path(user_id, job_id)
   if not os.path.exists(path):
     raise HTTPException(status_code=404, detail="Fichier final.mp4 introuvable sur le disque.")
 
@@ -208,38 +230,60 @@ def download_job(job_id: str):
 
 
 @router.delete("/{job_id}")
-def delete_job(job_id: str):
-  """Annule un job en cours d'exécution."""
-  job = get_job(job_id)
-  if not job:
+async def delete_job(job_id: str, user: dict = Depends(require_auth)):
+  """Supprime un job (actif ou terminé). User = ses jobs uniquement, admin = tous les jobs."""
+  mem_job = get_job(job_id)
+  db_job  = mem_job or await db_get_job(job_id)
+  if not db_job:
     raise HTTPException(status_code=404, detail="Job introuvable.")
-  if job["status"] in (DONE, FAILED, CANCELLED):
-    raise HTTPException(
-      status_code=409,
-      detail=f"Impossible d'annuler un job déjà terminé (statut : {job['status']}).",
-    )
-  cancel_job(job_id)
-  purge_job(job_id)
-  return {"detail": "Job annulé."}
+  if str(db_job["user_id"]) != str(user["id"]) and not user["is_admin"]:
+    raise HTTPException(status_code=403, detail="Accès refusé.")
+
+  if mem_job:
+    cancel_job(job_id)
+    purge_job(job_id)
+  else:
+    job_dir = os.path.join(STORAGE_ROOT, str(db_job["user_id"]), job_id)
+    if os.path.isdir(job_dir):
+      shutil.rmtree(job_dir, ignore_errors=True)
+
+  await db_delete_job(job_id)
+  return {"detail": "Job supprimé."}
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
-async def _run_render_pipeline(job_id: str, payload: dict) -> None:
-  """Orchestre le pipeline multi-clips : téléchargement → découpe → concat → rendu final."""
+async def _run_render_pipeline(
+  job_id: str,
+  user_id: str,
+  max_jobs: int,
+  cookies_file: Optional[str],
+  payload: dict,
+) -> None:
   try:
-    await ffmpeg.render_video(job_id, payload)
+    await ffmpeg.render_video(job_id, user_id, payload, cookies_file)
+
+    path = final_path(user_id, job_id)
+    file_size = os.path.getsize(path) if os.path.exists(path) else None
+    clips = payload.get("data", [])
+    duration = sum(c.get("duration", 0) for c in clips)
+
     update_job(job_id, status=DONE, message="Vidéo prête !")
+    await db_update_job_status(job_id, DONE, file_size_bytes=file_size, duration_seconds=duration)
+    await db_increment_metrics(duration_seconds=duration, clips_used=len(clips))
+    await db_increment_user_metrics(user_id, duration_seconds=duration, clips_used=len(clips))
+    await db_cleanup_max_jobs(user_id, max_jobs)
   except asyncio.CancelledError:
     pass
   except Exception as e:
     update_job(job_id, status=FAILED, error=str(e), message=f"Erreur : {e}")
+    purge_job(job_id)
+    await db_delete_job(job_id)
 
 
 # ── Générateur SSE ────────────────────────────────────────────────────────────
 
 async def _sse_generator(job_id: str) -> AsyncGenerator[str, None]:
-  """Envoie l'état du job toutes les 500 ms jusqu'à sa fin."""
   terminal = {DONE, FAILED, CANCELLED}
 
   while True:

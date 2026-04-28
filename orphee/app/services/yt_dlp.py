@@ -1,12 +1,8 @@
 import asyncio
 import os
-import shutil
-import tempfile
 from typing import Optional
 
 from ..job_store import register_process, unregister_process, update_job, DOWNLOADING
-
-_COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "/storage/cookies.txt")
 
 
 def _parse_seconds(time_str: str) -> float:
@@ -40,6 +36,7 @@ async def _run_ytdlp(cmd: list[str], job_id: str) -> tuple[int, bytes]:
 
 
 async def download(job_id: str, url: str, output_dir: str,
+                   cookies_file: Optional[str] = None,
                    start_time: Optional[str] = None, duration: Optional[int] = None) -> tuple[str, bool]:
   """Télécharge une vidéo via yt-dlp (YouTube, Instagram, TikTok, Vimeo...).
 
@@ -53,9 +50,9 @@ async def download(job_id: str, url: str, output_dir: str,
   base_cmd = [
     "yt-dlp",
     "--no-playlist",
-    "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
+    "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
-    "--remote-components", "ejs:github",
+    "--extractor-args", "youtube:player_client=android_vr",
     "--output", output_template,
   ]
 
@@ -65,19 +62,9 @@ async def download(job_id: str, url: str, output_dir: str,
     end_s = start_s + duration + 2  # +2s de buffer pour les keyframes
     sections_args = ["--download-sections", f"*{_fmt_time(start_s)}-{_fmt_time(end_s)}"]
 
-  def _cookies_args() -> tuple[list[str], Optional[str]]:
-    if os.path.isfile(_COOKIES_FILE):
-      tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
-      shutil.copy2(_COOKIES_FILE, tmp.name)
-      tmp.close()
-      return ["--cookies", tmp.name], tmp.name
-    return [], None
-
-  cookies_args, tmp_path = _cookies_args()
-
   # Tente d'abord avec --download-sections, fallback sans si ça échoue
   sections_used = False
-  cmd = base_cmd + sections_args + cookies_args + [url]
+  cmd = base_cmd + sections_args + [url]
   returncode, stderr = await _run_ytdlp(cmd, job_id)
 
   if returncode == 0 and sections_args:
@@ -86,14 +73,8 @@ async def download(job_id: str, url: str, output_dir: str,
     print(f"[yt-dlp] --download-sections a échoué, retry sans sections")
     for f in os.listdir(output_dir):
       os.remove(os.path.join(output_dir, f))
-    cookies_args2, tmp_path2 = _cookies_args()
-    cmd2 = base_cmd + cookies_args2 + [url]
+    cmd2 = base_cmd + [url]
     returncode, stderr = await _run_ytdlp(cmd2, job_id)
-    if tmp_path2:
-      os.unlink(tmp_path2)
-
-  if tmp_path and os.path.exists(tmp_path):
-    os.unlink(tmp_path)
 
   if returncode != 0:
     error = stderr.decode().strip().splitlines()[-1] if stderr else "Erreur inconnue"

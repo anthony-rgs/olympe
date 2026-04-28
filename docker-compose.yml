@@ -85,18 +85,20 @@ services:
   orphee: # -> Orphée — génération automatique de vidéos musicales
     build: ./orphee
     container_name: olympe-orphee
+    depends_on:
+      athena:
+        condition: service_healthy
     env_file: .env
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRE_HOURS: ${JWT_EXPIRE_HOURS:-72}
       CORS_ORIGINS: ${CORS_ORIGINS}
       STORAGE_ROOT: /storage/jobs
     volumes:
       - orphee-storage:/storage
-      - ./orphee/users.json:/storage/users.json
       - ./orphee/yt-dlp-cache:/root/.cache/yt-dlp
-      - ./cookie.txt:/storage/cookies.txt
     ports:
       - "8001:8000" # Swagger: http://localhost:8001/docs // only for local
     restart: unless-stopped
