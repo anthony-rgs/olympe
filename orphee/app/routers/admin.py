@@ -8,8 +8,9 @@ from psycopg.errors import UniqueViolation
 from pydantic import BaseModel
 
 from ..auth import hash_password, require_auth
-from ..config import COOKIES_DIR, STORAGE_ROOT
+from ..config import STORAGE_ROOT
 from ..db import get_db
+from ..job_store import get_active_jobs_for_user
 
 router = APIRouter()
 
@@ -199,10 +200,6 @@ async def delete_user(
   if os.path.isdir(user_dir):
     shutil.rmtree(user_dir, ignore_errors=True)
 
-  cookie_file = os.path.join(COOKIES_DIR, f"{user_id}.txt")
-  if os.path.isfile(cookie_file):
-    os.remove(cookie_file)
-
   return {"detail": "Utilisateur supprimé."}
 
 
@@ -212,8 +209,9 @@ async def delete_user(
 
 def _format_user_row(r: dict) -> dict:
   jobs = r.get("jobs") or []
+  user_id = str(r["id"])
   return {
-    "id":                     str(r["id"]),
+    "id":                     user_id,
     "username":               r["username"],
     "is_admin":               r["is_admin"],
     "features":               r["features"],
@@ -222,6 +220,11 @@ def _format_user_row(r: dict) -> dict:
     "total_duration_seconds": r["total_duration_seconds"],
     "total_clips_used":       r["total_clips_used"],
     "created_at":             r["created_at"],
+    "active_jobs": [
+      {"job_id": j["job_id"], "title": j["title"], "status": j["status"],
+       "message": j.get("message"), "created_at": j["created_at"]}
+      for j in get_active_jobs_for_user(user_id)
+    ],
     "jobs": [
       {"id": str(j["id"]), "title": j["title"], "status": j["status"],
        "file_size_bytes": j.get("file_size_bytes"), "duration_seconds": j.get("duration_seconds"),

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from ..auth import require_auth
 import shutil
 
-from ..config import COOKIES_DIR, STORAGE_ROOT
+from ..config import STORAGE_ROOT
 from ..db import get_db
 from ..job_store import (
   CANCELLED, DONE, FAILED,
@@ -141,12 +141,8 @@ async def create_render_job(
   job = create_job(user_id=user_id, title=slug)
   await db_insert_job(job["job_id"], user_id, slug)
 
-  cookies_file = os.path.join(COOKIES_DIR, f"{user_id}.txt")
-  if not os.path.isfile(cookies_file):
-    cookies_file = None
-
   payload = body.model_dump()
-  background_tasks.add_task(_run_render_pipeline, job["job_id"], user_id, user["max_jobs"], cookies_file, payload)
+  background_tasks.add_task(_run_render_pipeline, job["job_id"], user_id, user["max_jobs"], payload)
 
   return {
     "job_id":     job["job_id"],
@@ -257,11 +253,10 @@ async def _run_render_pipeline(
   job_id: str,
   user_id: str,
   max_jobs: int,
-  cookies_file: Optional[str],
   payload: dict,
 ) -> None:
   try:
-    await ffmpeg.render_video(job_id, user_id, payload, cookies_file)
+    await ffmpeg.render_video(job_id, user_id, payload)
 
     path = final_path(user_id, job_id)
     file_size = os.path.getsize(path) if os.path.exists(path) else None

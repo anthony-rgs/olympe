@@ -1,12 +1,10 @@
 import asyncio
 import os
-from typing import Optional
 
 from ..job_store import register_process, unregister_process, update_job, DOWNLOADING
 
 
 def _parse_seconds(time_str: str) -> float:
-  """Convertit HH:MM:SS ou MM:SS en secondes."""
   parts = [float(p) for p in time_str.strip().split(":")]
   if len(parts) == 3:
     return parts[0] * 3600 + parts[1] * 60 + parts[2]
@@ -16,7 +14,6 @@ def _parse_seconds(time_str: str) -> float:
 
 
 def _fmt_time(seconds: float) -> str:
-  """Convertit des secondes en HH:MM:SS.mmm."""
   h = int(seconds // 3600)
   m = int((seconds % 3600) // 60)
   s = seconds % 60
@@ -36,13 +33,9 @@ async def _run_ytdlp(cmd: list[str], job_id: str) -> tuple[int, bytes]:
 
 
 async def download(job_id: str, url: str, output_dir: str,
-                   cookies_file: Optional[str] = None,
-                   start_time: Optional[str] = None, duration: Optional[int] = None) -> tuple[str, bool]:
-  """Télécharge une vidéo via yt-dlp (YouTube, Instagram, TikTok, Vimeo...).
-
-  Retourne le chemin du fichier téléchargé.
-  Lève une RuntimeError si le téléchargement échoue.
-  """
+                   start_time: str | None = None,
+                   duration: int | None = None) -> tuple[str, bool]:
+  """Télécharge une vidéo via yt-dlp (YouTube, Instagram, TikTok, Vimeo...)."""
   update_job(job_id, status=DOWNLOADING, message="Téléchargement en cours...")
 
   output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
@@ -52,13 +45,9 @@ async def download(job_id: str, url: str, output_dir: str,
     "--no-playlist",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
+    "--extractor-args", "youtube:player_client=tv_embedded",
     "--output", output_template,
   ]
-  bgutil_arg = ["--extractor-args", "youtubepot-bgutilhttp:base_url=http://olympe-bgutil:4416"]
-  if cookies_file:
-    base_cmd += ["--cookies", cookies_file, "--extractor-args", "youtube:player_client=web"] + bgutil_arg
-  else:
-    base_cmd += ["--extractor-args", "youtube:player_client=android_vr"] + bgutil_arg
 
   sections_args = []
   if start_time is not None and duration is not None:

@@ -9,7 +9,6 @@ if not DATABASE_URL:
   raise RuntimeError("DATABASE_URL is not set. Provide it via docker-compose/.env")
 
 STORAGE_ROOT = os.getenv("STORAGE_ROOT", "/storage/jobs")
-COOKIES_DIR  = os.getenv("COOKIES_DIR",  "/storage/cookies")
 
 JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:

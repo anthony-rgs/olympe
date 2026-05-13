@@ -1,23 +1,14 @@
 import asyncio
-import os
-import time
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..auth import _FAIL_DELAY, create_token, get_user_by_username, require_auth, verify_password
-from ..config import COOKIES_DIR
 from ..db import get_db
 from ..job_store import get_active_jobs_for_user
 
-_COOKIE_MAX_AGE = int(os.getenv("COOKIE_MAX_AGE_SECONDS", "600"))
-
 router = APIRouter()
-
-
-def _cookie_path(user_id: str) -> str:
-  return os.path.join(COOKIES_DIR, f"{user_id}.txt")
 
 
 class LoginRequest(BaseModel):
@@ -75,30 +66,3 @@ async def me(user: dict = Depends(require_auth), conn: psycopg.AsyncConnection =
       for j in active
     ],
   }
-
-
-@router.get("/cookies/status")
-async def cookies_status(user: dict = Depends(require_auth)):
-  path = _cookie_path(str(user["id"]))
-  if not os.path.isfile(path):
-    return {"exists": False, "age_seconds": None, "needs_refresh": True}
-
-  age = int(time.time() - os.path.getmtime(path))
-  return {
-    "exists":        True,
-    "age_seconds":   age,
-    "needs_refresh": age > _COOKIE_MAX_AGE,
-  }
-
-
-class CookiesPayload(BaseModel):
-  cookies: str
-
-
-@router.post("/cookies", status_code=204)
-async def upload_cookies(body: CookiesPayload, user: dict = Depends(require_auth)):
-  path = _cookie_path(str(user["id"]))
-  os.makedirs(COOKIES_DIR, exist_ok=True)
-  with open(path, "w") as f:
-    f.write(body.cookies)
-  print(f"[cookies] {user['username']} — fichier mis à jour ({len(body.cookies)} bytes)")
