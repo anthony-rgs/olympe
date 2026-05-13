@@ -66,6 +66,33 @@ def _load_font(path: str, size: int, index: int = 0) -> ImageFont.FreeTypeFont:
     return _FONT_CACHE[key]
 
 
+def _font_line_h(font: ImageFont.FreeTypeFont, border_w: int) -> int:
+    """Font-metric line height (ascent+descent+stroke), fixed per font regardless of glyph content."""
+    ascent, descent = font.getmetrics()
+    return ascent + descent + 2 * border_w
+
+
+def text_height(text: str, font_path: str, size: int, border_w: int = 0) -> int:
+    """Returns the consistent line height for vertical centering.
+
+    Uses font.getmetrics() so texts with/without descenders (g, p, y) center identically —
+    same behavior as CSS `display:flex; align-items:center`."""
+    text_font  = _load_font(font_path, size)
+    emoji_size = _nearest_emoji_size(size)
+    emoji_font = _load_font(EMOJI_FONT_PATH, emoji_size, index=0) if _EMOJI_AVAIL else text_font
+
+    max_h = _font_line_h(text_font, border_w)
+
+    tmp_img  = Image.new("RGBA", (1, 1))
+    tmp_draw = ImageDraw.Draw(tmp_img)
+    for run_text, is_emoji_run in _split_runs(text):
+        if is_emoji_run:
+            bbox = tmp_draw.textbbox((0, 0), run_text, font=emoji_font, stroke_width=0)
+            max_h = max(max_h, max(bbox[3] - bbox[1], 1))
+
+    return max_h
+
+
 def render_text_png(
     text: str,
     font_path: str,
@@ -103,8 +130,13 @@ def render_text_png(
     total_w = sum(m[0] for m in metrics)
     total_h = max(m[1] for m in metrics) if metrics else size
 
+    # Canvas uses font line height so the text is always centered within the same box,
+    # regardless of whether glyphs have descenders — matches text_height() return value.
+    line_h   = _font_line_h(text_font, border_w)
+    canvas_h = max(line_h, total_h) + 2
+    top_off  = (canvas_h - 2 - total_h) // 2  # center glyphs vertically
+
     canvas_w = total_w + 2
-    canvas_h = total_h + 2
 
     # ── Render ──────────────────────────────────────────────────────────────────
     img  = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
@@ -113,7 +145,7 @@ def render_text_png(
     x = 0
     for (run_text, is_emoji_run), (rw, _rh, rtop) in zip(runs, metrics):
         font = emoji_font if is_emoji_run else text_font
-        y    = -rtop  # align tops of all runs
+        y    = -rtop + top_off  # align tops, then center within line-height box
 
         if is_emoji_run:
             draw.text((x, y), run_text, font=font, embedded_color=True)

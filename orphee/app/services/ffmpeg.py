@@ -547,13 +547,14 @@ def build_filter_complex(
       base = float(i - n + WIN + si)
       return base - 1.0 if si > 0 else base  # si>0: enters from one slot above
 
-    def _y_expr_sliding(i: int, extra: float = 0.0, canvas: bool = False) -> str:
+    def _y_expr_sliding(i: int, extra: float = 0.0, canvas: bool = False, item_h: float | None = None) -> str:
       """Y ffmpeg expression for item i.
       canvas=True: Y relative to list_top (for canvas-based clipping)."""
       si, sf   = _si_sf(i)
       rel      = _relevant_slides(si, sf)
       k_init   = _k_initial(i, si)
-      row_off  = (slot_h - RANK_FONTSIZE) / 2 + extra
+      h        = item_h if item_h is not None else RANK_FONTSIZE
+      row_off  = (slot_h - h) / 2 + extra
       base     = 0.0 if canvas else list_top
 
       def y_at(k: float) -> float:
@@ -624,7 +625,7 @@ def build_filter_complex(
 
       # n ≤ WIN : comportement classique — Y relatif au canvas (- list_top)
       for i, item in enumerate(data):
-        y_row     = int(slot_h * i + (slot_h - RANK_FONTSIZE) / 2)  # relatif canvas
+        y_center  = int(slot_h * i + slot_h / 2)  # centre vertical du slot
         is_teaser = teaser_top and i == 0
 
         if is_teaser:
@@ -639,7 +640,12 @@ def build_filter_complex(
         anim        = cs.get("animation", "fade")
         pos         = cs.get("position", "left")
         has_id      = bool(str(item["id"]).strip())
-        id_is_emoji = has_id and bool(text_render._EMOJI_RE.search(str(item["id"])))
+
+        # Hauteurs réelles pour aligner ID et titre sur le même centre vertical
+        id_h    = text_render.text_height(str(item["id"]), _resolve_font(ids.get("font")), _v(ids, "size", RANK_FONTSIZE), _v(ids, "border", RANK_BORDER)) if has_id else 0
+        title_h = text_render.text_height(item["title"], _resolve_font(cs.get("font")), _v(cs, "size", CLIP_TITLE_FONTSIZE), _v(cs, "border", CLIP_TITLE_BORDER))
+        id_y    = y_center - id_h // 2
+        title_y = y_center - title_h // 2
 
         if pos == "center":
           title_x = "center"
@@ -653,7 +659,7 @@ def build_filter_complex(
             cv, str(item["id"]),
             fontsize=_v(ids, "size", RANK_FONTSIZE),
             border_w=_v(ids, "border", RANK_BORDER),
-            x_mode=f"fixed:{RANK_X}", y_px=y_row,
+            x_mode=f"fixed:{RANK_X}", y_px=id_y,
             font=ids.get("font"),
             color=ids.get("color") or "0xFFFFFF",
             appear_at=ts_val if hl_active else 0.0,
@@ -664,12 +670,11 @@ def build_filter_complex(
             opacity=_v(ids, "opacity", 1.0),
           )
 
-        title_y_offset = 15 if id_is_emoji else 5
         cv = _overlay_text(
           cv, item["title"],
           fontsize=_v(cs, "size", CLIP_TITLE_FONTSIZE),
           border_w=_v(cs, "border", CLIP_TITLE_BORDER),
-          x_mode=title_x, y_px=y_row + title_y_offset,
+          x_mode=title_x, y_px=title_y,
           font=cs.get("font"),
           color=cs.get("color") or "0xFFFFFF",
           appear_at=ts_val,
@@ -696,13 +701,15 @@ def build_filter_complex(
         ids         = item.get("idStyle") or {}
         pos         = cs.get("position", "left")
         has_id      = bool(str(item["id"]).strip())
-        id_is_emoji = has_id and bool(text_render._EMOJI_RE.search(str(item["id"])))
 
-        win_en      = _win_enable(i)
-        alpha       = _win_alpha(i)
-        id_y        = _y_expr_sliding(i, canvas=True)
-        title_y_off = 20 if id_is_emoji else 6
-        title_y     = _y_expr_sliding(i, extra=title_y_off, canvas=True)
+
+        win_en  = _win_enable(i)
+        alpha   = _win_alpha(i)
+
+        id_h_val    = text_render.text_height(str(item["id"]), _resolve_font(ids.get("font")), _v(ids, "size", RANK_FONTSIZE), _v(ids, "border", RANK_BORDER)) if has_id else RANK_FONTSIZE
+        title_h_val = text_render.text_height(item["title"], _resolve_font(cs.get("font")), _v(cs, "size", CLIP_TITLE_FONTSIZE), _v(cs, "border", CLIP_TITLE_BORDER))
+        id_y        = _y_expr_sliding(i, canvas=True, item_h=id_h_val)
+        title_y     = _y_expr_sliding(i, canvas=True, item_h=title_h_val)
 
         if pos == "center":
           tx = "center"
@@ -991,7 +998,7 @@ def build_filter_complex(
   return fc, extra_inputs
 
 
-async def render_video(job_id: str, user_id: str, payload: dict, cookies_file: str | None) -> None:
+async def render_video(job_id: str, user_id: str, payload: dict) -> None:
   """Télécharge, découpe, concatène les clips et assemble la vidéo finale."""
   from ..config import STORAGE_ROOT
   from . import yt_dlp
@@ -1030,7 +1037,6 @@ async def render_video(job_id: str, user_id: str, payload: dict, cookies_file: s
     start_time = item.get("start_time") if not item.get("claude") else None
     source_file, sections_used = await yt_dlp.download(
       job_id, item["url"], raw_subdir,
-      cookies_file=cookies_file,
       start_time=start_time,
       duration=item.get("duration"),
     )
