@@ -90,7 +90,7 @@ def text_height(text: str, font_path: str, size: int, border_w: int = 0) -> int:
             bbox = tmp_draw.textbbox((0, 0), run_text, font=emoji_font, stroke_width=0)
             max_h = max(max_h, max(bbox[3] - bbox[1], 1))
 
-    return max_h
+    return max_h + 4  # +4 = 2px top + 2px bottom padding baked into the logical box
 
 
 def render_text_png(
@@ -130,11 +130,12 @@ def render_text_png(
     total_w = sum(m[0] for m in metrics)
     total_h = max(m[1] for m in metrics) if metrics else size
 
-    # Canvas uses font line height so the text is always centered within the same box,
-    # regardless of whether glyphs have descenders — matches text_height() return value.
+    # Canvas uses font line height + 4px (2 top, 2 bottom) so centering is consistent
+    # regardless of glyph content. For text with descenders (g,p,q) top_off == 2;
+    # for text without descenders top_off > 2 (dynamic centering within the box).
     line_h   = _font_line_h(text_font, border_w)
-    canvas_h = max(line_h, total_h) + 2
-    top_off  = (canvas_h - 2 - total_h) // 2  # center glyphs vertically
+    canvas_h = max(line_h, total_h) + 4   # matches text_height() = line_h + 4
+    top_off  = (canvas_h - total_h) // 2  # always ≥ 2
 
     canvas_w = total_w + 2
 

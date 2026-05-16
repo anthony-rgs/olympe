@@ -273,8 +273,12 @@ async def _run_render_pipeline(
   except Exception as e:
     print(f"[pipeline] job={job_id} FAILED: {e}")
     update_job(job_id, status=FAILED, error=str(e), message=f"Erreur : {e}")
-    purge_job(job_id)
-    await db_delete_job(job_id)
+    await db_update_job_status(job_id, FAILED, error=str(e))
+    # Nettoie les fichiers disque mais garde le job en mémoire (status=FAILED)
+    # pour que le générateur SSE puisse remonter l'erreur avant la fin de la connexion.
+    job_dir = os.path.join(STORAGE_ROOT, user_id, job_id)
+    if os.path.isdir(job_dir):
+      shutil.rmtree(job_dir, ignore_errors=True)
 
 
 # ── Générateur SSE ────────────────────────────────────────────────────────────
