@@ -45,7 +45,7 @@ async def download(job_id: str, url: str, output_dir: str,
     "--no-playlist",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
-    "--extractor-args", "youtube:player_client=tv_embedded",
+    "--extractor-args", "youtubepot-bgutilhttp:base_url=http://bgutil:4416",
     "--output", output_template,
   ]
 

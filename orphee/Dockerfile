@@ -22,13 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Installe les dépendances Node.js du serveur bgutil (server.js dans un sous-dossier)
-RUN BGUTIL_SERVER=$(find /usr/local/lib/python3.11/site-packages/bgutil_ytdlp_pot_provider -name "server.js" | head -1) \
-  && if [ -n "$BGUTIL_SERVER" ]; then \
-       npm install --prefix "$(dirname $BGUTIL_SERVER)" --omit=dev; \
-     else \
-       echo "bgutil server.js not found, skipping npm install"; \
-     fi
+# yt-dlp séparé pour pouvoir le mettre à jour sans rebuild complet
+RUN pip install --no-cache-dir --upgrade yt-dlp
 
 # Code applicatif
 COPY app/ /app/app/
