@@ -10,4 +10,3 @@ bcrypt==4.0.1
 python-multipart==0.0.9
 Pillow>=10.0.0
 psutil>=5.9.0
-bgutil-ytdlp-pot-provider>=0.7.0
