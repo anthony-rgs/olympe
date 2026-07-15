@@ -45,9 +45,12 @@ async def download(job_id: str, url: str, output_dir: str,
     "--no-playlist",
     "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio/bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
     "--merge-output-format", "mp4",
-    "--extractor-args", "youtubepot-bgutilhttp:base_url=http://bgutil:4416",
     "--output", output_template,
   ]
+
+  proxy = os.getenv("YTDLP_PROXY", "")
+  if proxy:
+    base_cmd += ["--proxy", proxy]
 
   sections_args = []
   if start_time is not None and duration is not None:
