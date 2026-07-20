@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS orphee_users (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username       TEXT NOT NULL,
   password_hash  TEXT NOT NULL,
+  email          TEXT,
   is_admin       BOOLEAN NOT NULL DEFAULT FALSE,
   features       TEXT[] NOT NULL DEFAULT '{}',
   max_jobs       INTEGER NOT NULL DEFAULT 1,

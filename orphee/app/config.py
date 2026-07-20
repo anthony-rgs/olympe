@@ -15,3 +15,8 @@ if not JWT_SECRET:
   raise RuntimeError("JWT_SECRET is not set. Provide it via docker-compose/.env")
 
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "72"))
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM    = os.getenv("RESEND_FROM", "notifications@vexia.studio")
+APP_URL        = os.getenv("APP_URL", "https://vexia.studio")
+API_URL        = os.getenv("API_URL", "https://orphee.olympe.center")

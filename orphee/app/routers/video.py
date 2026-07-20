@@ -7,6 +7,7 @@ from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from ..auth import require_auth
@@ -21,6 +22,7 @@ from ..job_store import (
   final_path, get_active_job_for_user, get_job, purge_job, update_job,
 )
 from ..services import ffmpeg
+from ..services.email import send_video_failed, send_video_ready, verify_download_token
 
 router = APIRouter()
 
@@ -201,13 +203,30 @@ async def stream_job(job_id: str, user: dict = Depends(require_auth)):
 
 
 @router.get("/{job_id}/download")
-async def download_job(job_id: str, user: dict = Depends(require_auth)):
-  """Télécharge le final.mp4 d'un job terminé."""
+async def download_job(
+  job_id: str,
+  token: Optional[str] = None,
+  credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+  conn = Depends(get_db),
+):
+  """Télécharge le final.mp4 d'un job terminé (auth JWT ou token de téléchargement)."""
+  if token:
+    verified_job_id = verify_download_token(token)
+    if not verified_job_id or verified_job_id != job_id:
+      raise HTTPException(status_code=403, detail="Token de téléchargement invalide ou expiré.")
+  elif credentials:
+    user = await require_auth(credentials, conn)
+    job = get_job(job_id) or await db_get_job(job_id)
+    if not job:
+      raise HTTPException(status_code=404, detail="Job introuvable.")
+    if str(job["user_id"]) != str(user["id"]) and not user["is_admin"]:
+      raise HTTPException(status_code=403, detail="Accès refusé.")
+  else:
+    raise HTTPException(status_code=401, detail="Authentification requise.")
+
   job = get_job(job_id) or await db_get_job(job_id)
   if not job:
     raise HTTPException(status_code=404, detail="Job introuvable.")
-  if str(job["user_id"]) != str(user["id"]) and not user["is_admin"]:
-    raise HTTPException(status_code=403, detail="Accès refusé.")
   if job["status"] != DONE:
     raise HTTPException(status_code=409, detail=f"La vidéo n'est pas encore prête (statut : {job['status']}).")
 
@@ -268,12 +287,16 @@ async def _run_render_pipeline(
     await db_increment_metrics(duration_seconds=duration, clips_used=len(clips))
     await db_increment_user_metrics(user_id, duration_seconds=duration, clips_used=len(clips))
     await db_cleanup_max_jobs(user_id, max_jobs)
+    job = get_job(job_id)
+    await send_video_ready(user_id, job_id, job["title"] if job else job_id, duration)
   except asyncio.CancelledError:
     pass
   except Exception as e:
     print(f"[pipeline] job={job_id} FAILED: {e}")
     update_job(job_id, status=FAILED, error=str(e), message=f"Erreur : {e}")
     await db_update_job_status(job_id, FAILED, error=str(e))
+    job = get_job(job_id)
+    await send_video_failed(user_id, job_id, job["title"] if job else job_id, str(e))
     # Nettoie les fichiers disque mais garde le job en mémoire (status=FAILED)
     # pour que le générateur SSE puisse remonter l'erreur avant la fin de la connexion.
     job_dir = os.path.join(STORAGE_ROOT, user_id, job_id)
