@@ -48,6 +48,7 @@ async def me(user: dict = Depends(require_auth), conn: psycopg.AsyncConnection =
   return {
     "id":                     user_id,
     "username":               user["username"],
+    "email":                  user.get("email"),
     "is_admin":               user["is_admin"],
     "features":               user["features"],
     "max_jobs":               user["max_jobs"],

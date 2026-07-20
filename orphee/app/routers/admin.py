@@ -28,6 +28,7 @@ async def require_admin(user: dict = Depends(require_auth)) -> dict:
 class CreateUserRequest(BaseModel):
   username: str
   password: str
+  email: str | None = None
   is_admin: bool = False
   features: list[str] = []
   max_jobs: int = 1
@@ -36,6 +37,7 @@ class CreateUserRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
   username:  str | None = None
   password:  str | None = None
+  email:     str | None = None
   is_admin:  bool | None = None
   features:  list[str] | None = None
   max_jobs:  int | None = None
@@ -56,7 +58,7 @@ async def list_users(
   async with conn.cursor() as cur:
     await cur.execute("""
       SELECT
-        u.id, u.username, u.is_admin, u.features, u.max_jobs,
+        u.id, u.username, u.email, u.is_admin, u.features, u.max_jobs,
         u.total_videos_created, u.total_duration_seconds, u.total_clips_used,
         u.created_at,
         COALESCE(
@@ -92,18 +94,19 @@ async def create_user(
     async with conn.cursor() as cur:
       await cur.execute(
         """
-        INSERT INTO orphee_users (username, password_hash, is_admin, features, max_jobs)
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id, username, is_admin, features, max_jobs, created_at
+        INSERT INTO orphee_users (username, password_hash, email, is_admin, features, max_jobs)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id, username, email, is_admin, features, max_jobs, created_at
         """,
-        (body.username, hash_password(body.password), body.is_admin, body.features, body.max_jobs),
+        (body.username, hash_password(body.password), body.email, body.is_admin, body.features, body.max_jobs),
       )
       row = await cur.fetchone()
     await conn.commit()
   except UniqueViolation:
     raise HTTPException(status_code=409, detail=f"Le nom d'utilisateur '{body.username}' est déjà pris.")
-  return {"id": str(row["id"]), "username": row["username"], "is_admin": row["is_admin"],
-          "features": row["features"], "max_jobs": row["max_jobs"], "created_at": row["created_at"]}
+  return {"id": str(row["id"]), "username": row["username"], "email": row["email"],
+          "is_admin": row["is_admin"], "features": row["features"], "max_jobs": row["max_jobs"],
+          "created_at": row["created_at"]}
 
 
 @router.patch("/users/{user_id}")
@@ -117,6 +120,7 @@ async def update_user(
 
   if body.username  is not None: fields.append("username = %s");      values.append(body.username)
   if body.password  is not None: fields.append("password_hash = %s"); values.append(hash_password(body.password))
+  if body.email     is not None: fields.append("email = %s");         values.append(body.email)
   if body.is_admin  is not None: fields.append("is_admin = %s");      values.append(body.is_admin)
   if body.features  is not None: fields.append("features = %s");      values.append(body.features)
   if body.max_jobs  is not None: fields.append("max_jobs = %s");      values.append(body.max_jobs)
@@ -213,6 +217,7 @@ def _format_user_row(r: dict) -> dict:
   return {
     "id":                     user_id,
     "username":               r["username"],
+    "email":                  r.get("email"),
     "is_admin":               r["is_admin"],
     "features":               r["features"],
     "max_jobs":               r["max_jobs"],
