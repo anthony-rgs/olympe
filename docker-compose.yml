@@ -101,6 +101,7 @@ services:
       RESEND_FROM: ${RESEND_FROM:-notifications@vexia.studio}
       APP_URL: ${APP_URL:-https://vexia.studio}
       API_URL: ${API_URL:-https://orphee.olympe.center}
+
     volumes:
       - orphee-storage:/storage
       - ./orphee/yt-dlp-cache:/root/.cache/yt-dlp

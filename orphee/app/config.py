@@ -16,9 +16,7 @@ if not JWT_SECRET:
 
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "72"))
 
-RESEND_API_KEY        = os.getenv("RESEND_API_KEY", "")
-RESEND_FROM           = os.getenv("RESEND_FROM", "notifications@vexia.studio")
-RESEND_TEMPLATE_READY = os.getenv("RESEND_TEMPLATE_READY", "")
-RESEND_TEMPLATE_FAILED = os.getenv("RESEND_TEMPLATE_FAILED", "")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_FROM    = os.getenv("RESEND_FROM", "notifications@vexia.studio")
 APP_URL        = os.getenv("APP_URL", "https://vexia.studio")
 API_URL        = os.getenv("API_URL", "https://orphee.olympe.center")

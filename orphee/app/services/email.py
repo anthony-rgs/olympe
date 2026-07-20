@@ -1,19 +1,24 @@
 import asyncio
-import json
-import urllib.request
+import os
 from datetime import datetime, timedelta, timezone
 
 import psycopg
+import resend
 from jose import jwt
 from psycopg.rows import dict_row
 
-from ..config import (
-  API_URL, APP_URL, DATABASE_URL, JWT_SECRET,
-  RESEND_API_KEY, RESEND_FROM,
-  RESEND_TEMPLATE_FAILED, RESEND_TEMPLATE_READY,
-)
+from ..config import API_URL, APP_URL, DATABASE_URL, JWT_SECRET, RESEND_API_KEY, RESEND_FROM
 
 _DL_TOKEN_HOURS = 48
+_TMPL_DIR = os.path.join(os.path.dirname(__file__), "templates")
+
+
+def _load_template(name: str, **kwargs) -> str:
+  with open(os.path.join(_TMPL_DIR, name), encoding="utf-8") as f:
+    html = f.read()
+  for key, value in kwargs.items():
+    html = html.replace(f"{{{{{key}}}}}", str(value))
+  return html
 
 
 def create_download_token(job_id: str) -> str:
@@ -50,29 +55,8 @@ def _fmt_duration(seconds: int) -> str:
   return f"{m}m {s:02d}s" if s else f"{m}m"
 
 
-def _send_template(to: str, subject: str, template_id: str, variables: dict) -> None:
-  payload = json.dumps({
-    "from": RESEND_FROM,
-    "to": [to],
-    "subject": subject,
-    "template_id": template_id,
-    "with": variables,
-  }).encode()
-  req = urllib.request.Request(
-    "https://api.resend.com/emails",
-    data=payload,
-    headers={
-      "Authorization": f"Bearer {RESEND_API_KEY}",
-      "Content-Type": "application/json",
-      "User-Agent": "resend-python/2.0.0",
-    },
-  )
-  with urllib.request.urlopen(req) as resp:
-    resp.read()
-
-
 async def send_video_ready(user_id: str, job_id: str, job_title: str, duration: int) -> None:
-  if not RESEND_API_KEY or not RESEND_TEMPLATE_READY:
+  if not RESEND_API_KEY:
     return
 
   email = await _get_user_email(user_id)
@@ -81,21 +65,27 @@ async def send_video_ready(user_id: str, job_id: str, job_title: str, duration: 
 
   token = create_download_token(job_id)
   download_url = f"{API_URL}/jobs/{job_id}/download?token={token}"
+  html = _load_template("video_ready.html",
+    job_title=job_title,
+    duration=_fmt_duration(duration),
+    download_url=download_url,
+    app_url=APP_URL,
+  )
 
-  await asyncio.to_thread(_send_template, email,
-    f"✅ Votre vidéo est prête — {job_title}",
-    RESEND_TEMPLATE_READY,
+  resend.api_key = RESEND_API_KEY
+  await asyncio.to_thread(
+    resend.Emails.send,
     {
-      "job_title": job_title,
-      "duration": _fmt_duration(duration),
-      "download_url": download_url,
-      "app_url": APP_URL,
+      "from": RESEND_FROM,
+      "to": [email],
+      "subject": f"✅ Votre vidéo est prête — {job_title}",
+      "html": html,
     },
   )
 
 
 async def send_video_failed(user_id: str, _job_id: str, job_title: str, error: str) -> None:
-  if not RESEND_API_KEY or not RESEND_TEMPLATE_FAILED:
+  if not RESEND_API_KEY:
     return
 
   email = await _get_user_email(user_id)
@@ -103,13 +93,19 @@ async def send_video_failed(user_id: str, _job_id: str, job_title: str, error: s
     return
 
   error_display = (error[:200] + "…") if len(error) > 200 else error
+  html = _load_template("video_failed.html",
+    job_title=job_title,
+    error=error_display,
+    app_url=APP_URL,
+  )
 
-  await asyncio.to_thread(_send_template, email,
-    f"❌ Erreur de rendu — {job_title}",
-    RESEND_TEMPLATE_FAILED,
+  resend.api_key = RESEND_API_KEY
+  await asyncio.to_thread(
+    resend.Emails.send,
     {
-      "job_title": job_title,
-      "error": error_display,
-      "app_url": APP_URL,
+      "from": RESEND_FROM,
+      "to": [email],
+      "subject": f"❌ Erreur de rendu — {job_title}",
+      "html": html,
     },
   )
