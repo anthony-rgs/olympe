@@ -30,10 +30,17 @@
         .h1 {
           font-size: 24px !important;
         }
-        .btn-row td {
+        .btn-outer {
+          text-align: center !important;
+        }
+        .btn-wrap {
+          width: 100% !important;
+        }
+        .btn-cell {
           display: block !important;
           padding-right: 0 !important;
           padding-bottom: 10px !important;
+          text-align: center !important;
         }
       }
     </style>
@@ -262,7 +269,7 @@
                   </tr>
                 </table>
 
-                <!-- Inset blocks -->
+                <!-- Inset: Vidéo -->
                 <table
                   role="presentation"
                   cellpadding="0"
@@ -272,7 +279,6 @@
                 >
                   <tr>
                     <td
-                      valign="top"
                       style="
                         background-color: #1a1a1a;
                         border-radius: 8px;
@@ -314,17 +320,37 @@
                         {{job_title}}
                       </p>
                     </td>
+                  </tr>
+                </table>
+
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="100%"
+                >
+                  <tr>
                     <td
-                      width="10"
-                      style="width: 10px"
+                      height="10"
+                      style="height: 10px; line-height: 10px; font-size: 1px"
                     >
                       &nbsp;
                     </td>
+                  </tr>
+                </table>
+
+                <!-- Inset: Durée -->
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="100%"
+                >
+                  <tr>
                     <td
-                      valign="top"
-                      width="130"
                       style="
-                        width: 130px;
                         background-color: #1a1a1a;
                         border-radius: 8px;
                         border: 1px solid #272727;
@@ -358,7 +384,6 @@
                           color: #a78bfa;
                           line-height: 1.3;
                           letter-spacing: 0.04em;
-                          white-space: nowrap;
                         "
                       >
                         {{duration}}
@@ -420,90 +445,109 @@
                 <!-- CTAs -->
                 <table
                   role="presentation"
-                  class="btn-row"
                   cellpadding="0"
                   cellspacing="0"
                   border="0"
+                  width="100%"
                 >
                   <tr>
                     <td
-                      valign="middle"
-                      style="padding-right: 10px"
+                      class="btn-outer"
+                      style="text-align: left"
                     >
-                      <a
-                        href="{{app_url}}"
-                        style="
-                          display: inline-block;
-                          font-family:
-                            -apple-system, BlinkMacSystemFont,
-                            &quot;Segoe UI&quot;, &quot;Helvetica Neue&quot;,
-                            Arial, sans-serif;
-                          font-size: 12px;
-                          font-weight: 600;
-                          color: #686868;
-                          text-decoration: none;
-                          border: 1px solid #363636;
-                          border-radius: 8px;
-                          padding: 11px 18px;
-                          line-height: 1;
-                          mso-line-height-rule: exactly;
-                          letter-spacing: 0.02em;
-                        "
-                        >Espace client</a
+                      <!-- btn-wrap devient width:100% sur mobile pour que les td en display:block puissent se centrer -->
+                      <table
+                        role="presentation"
+                        class="btn-wrap"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
                       >
-                    </td>
-                    <td valign="middle">
-                      <!--[if mso]>
-                        <v:roundrect
-                          xmlns:v="urn:schemas-microsoft-com:vml"
-                          xmlns:w="urn:schemas-microsoft-com:office:word"
-                          href="{{download_url}}"
-                          style="
-                            height: 40px;
-                            v-text-anchor: middle;
-                            width: 170px;
-                          "
-                          arcsize="20%"
-                          stroke="f"
-                          fillcolor="#a78bfa"
-                        >
-                          <w:anchorlock />
-                          <center
-                            style="
-                              color: #1a1a1a;
-                              font-family: sans-serif;
-                              font-size: 13px;
-                              font-weight: 700;
-                              letter-spacing: 2px;
-                            "
+                        <tr>
+                          <td
+                            class="btn-cell"
+                            valign="middle"
+                            style="padding-right: 10px"
                           >
-                            Télécharger ↓
-                          </center>
-                        </v:roundrect>
-                      <![endif]-->
-                      <!--[if !mso]><!-->
-                      <a
-                        href="{{download_url}}"
-                        style="
-                          display: inline-block;
-                          font-family:
-                            -apple-system, BlinkMacSystemFont,
-                            &quot;Segoe UI&quot;, &quot;Helvetica Neue&quot;,
-                            Arial, sans-serif;
-                          font-size: 13px;
-                          font-weight: 700;
-                          color: #1a1a1a;
-                          text-decoration: none;
-                          background-color: #a78bfa;
-                          border-radius: 8px;
-                          padding: 11px 22px;
-                          line-height: 1;
-                          mso-line-height-rule: exactly;
-                          letter-spacing: 0.02em;
-                        "
-                        >Télécharger ↓</a
-                      >
-                      <!--<![endif]-->
+                            <a
+                              href="{{app_url}}"
+                              style="
+                                display: inline-block;
+                                font-family:
+                                  -apple-system, BlinkMacSystemFont,
+                                  &quot;Segoe UI&quot;,
+                                  &quot;Helvetica Neue&quot;, Arial, sans-serif;
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: #c0c0c0;
+                                text-decoration: none;
+                                border: 1px solid #363636;
+                                border-radius: 8px;
+                                padding: 11px 18px;
+                                line-height: 1;
+                                mso-line-height-rule: exactly;
+                                letter-spacing: 0.02em;
+                              "
+                              >Espace client</a
+                            >
+                          </td>
+                          <td
+                            class="btn-cell"
+                            valign="middle"
+                          >
+                            <!--[if mso]>
+                              <v:roundrect
+                                xmlns:v="urn:schemas-microsoft-com:vml"
+                                xmlns:w="urn:schemas-microsoft-com:office:word"
+                                href="{{download_url}}"
+                                style="
+                                  height: 40px;
+                                  v-text-anchor: middle;
+                                  width: 170px;
+                                "
+                                arcsize="20%"
+                                stroke="f"
+                                fillcolor="#a78bfa"
+                              >
+                                <w:anchorlock />
+                                <center
+                                  style="
+                                    color: #1a1a1a;
+                                    font-family: sans-serif;
+                                    font-size: 13px;
+                                    font-weight: 700;
+                                  "
+                                >
+                                  Télécharger ↓
+                                </center>
+                              </v:roundrect>
+                            <![endif]-->
+                            <!--[if !mso]><!-->
+                            <a
+                              href="{{download_url}}"
+                              style="
+                                display: inline-block;
+                                font-family:
+                                  -apple-system, BlinkMacSystemFont,
+                                  &quot;Segoe UI&quot;,
+                                  &quot;Helvetica Neue&quot;, Arial, sans-serif;
+                                font-size: 13px;
+                                font-weight: 700;
+                                color: #1a1a1a;
+                                text-decoration: none;
+                                background-color: #a78bfa;
+                                border-radius: 8px;
+                                padding: 11px 22px;
+                                line-height: 1;
+                                mso-line-height-rule: exactly;
+                                letter-spacing: 0.02em;
+                              "
+                              >Télécharger ↓</a
+                            >
+                            <!--<![endif]-->
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
                 </table>
