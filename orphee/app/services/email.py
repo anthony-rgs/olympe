@@ -64,6 +64,7 @@ def _send_template(to: str, subject: str, template_id: str, variables: dict) -> 
     headers={
       "Authorization": f"Bearer {RESEND_API_KEY}",
       "Content-Type": "application/json",
+      "User-Agent": "resend-python/2.0.0",
     },
   )
   with urllib.request.urlopen(req) as resp:
